@@ -30,20 +30,28 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 
 ## Phase 1 — `custom_components/mutatrack/` skeleton
 
-- [ ] `manifest.json`
-- [ ] `const.py` — field index map, endpoint URLs, defaults
-- [ ] `api.py` — ValueClouds client (login, deviceDats, positional-array
-      parsing, defensive/index-tolerant)
-- [ ] `config_flow.py` — email/password entry, PN/SN override
-- [ ] `coordinator.py` — `DataUpdateCoordinator`, reactive re-auth on
-      401/unavailable
-- [ ] `sensor.py` — entities from the field map; correct
-      `device_class`/`state_class` for Energy Dashboard compatibility on
-      cumulative kWh fields
-- [ ] `diagnostics.py` — redacted diagnostics export
-- [ ] `strings.json` / `translations/en.json`
+- [x] `manifest.json`
+- [x] `const.py` — field index map, endpoint URLs, defaults
+- [x] `api.py` — ValueClouds client (login, deviceDats, positional-array
+      parsing, defensive/index-tolerant, one reactive re-auth retry on
+      401/403)
+- [x] `config_flow.py` — email/password + PN/SN/devcode entry, with a login
+      test before saving the entry
+- [x] `coordinator.py` — `DataUpdateCoordinator`, parses raw array into a
+      name-keyed dict tolerant of short/misaligned arrays
+- [x] `sensor.py` — entities from the field map; `device_class`/`state_class`
+      set for Energy Dashboard compatibility on cumulative kWh fields;
+      ambiguous fields (work_state, software_version, last_update_timestamp,
+      charger_work_enable) left as plain diagnostic sensors pending Phase 2
+      validation
+- [x] `diagnostics.py` — redacted diagnostics export (email/password/SN)
+- [x] `strings.json` / `translations/en.json`
+- [x] `__init__.py` — config entry setup/unload, platform forwarding
 
-Scope: v1 read-only monitoring only, per Confluence roadmap.
+Scope: v1 read-only monitoring only, per Confluence roadmap. Syntax and
+JSON validated locally; **not yet tested against a running HA instance or
+real API data** — PN/SN/devcode are required config-flow fields with no
+live device to confirm them against yet (that's Phase 2).
 
 ## Phase 2 — Local API test harness
 

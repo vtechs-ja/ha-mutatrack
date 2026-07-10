@@ -1,0 +1,12 @@
+{
+  "domain": "mutatrack",
+  "name": "MutaTrack",
+  "codeowners": ["@deron"],
+  "config_flow": true,
+  "documentation": "https://github.com/deron/ha-mutatrack",
+  "integration_type": "device",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/deron/ha-mutatrack/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

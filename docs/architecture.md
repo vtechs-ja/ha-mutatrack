@@ -1,6 +1,8 @@
 # Integration Architecture
 
-Status: planned, not yet implemented (see IMPLEMENTATION_PLAN.md Phase 1).
+Status: Phase 1 skeleton implemented (syntax/JSON validated only — not yet
+run against a live HA instance or real API data, see IMPLEMENTATION_PLAN.md
+Phase 2).
 
 ## Layout
 
