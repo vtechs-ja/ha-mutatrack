@@ -1,7 +1,8 @@
 # Local Dev Setup
 
-Status: harness implemented (`scripts/api_harness.py`), not yet run against
-a real account (see IMPLEMENTATION_PLAN.md Phase 2).
+Status: harness confirmed working end-to-end against a real account
+(2026-07-10) — login and device data fetch both succeed live. Not yet
+tested inside an actual Home Assistant instance.
 
 ## API test harness
 
@@ -10,8 +11,8 @@ a real account (see IMPLEMENTATION_PLAN.md Phase 2).
 needing a full Home Assistant instance running. It imports the
 integration's own `api.py`/`const.py` directly via `importlib` (bypassing
 `custom_components/mutatrack/__init__.py`, which has Home Assistant-only
-imports), so the field map and request logic it exercises are never a
-hand-maintained duplicate of what actually ships.
+imports), so the request logic it exercises is never a hand-maintained
+duplicate of what actually ships.
 
 ### Setup
 
@@ -25,35 +26,37 @@ python3 -m venv .venv
 ### Credentials
 
 - `.env` (gitignored, never commit): `VALUECLOUDS_EMAIL`,
-  `VALUECLOUDS_PASSWORD`, plus optionally `VALUECLOUDS_PN`,
-  `VALUECLOUDS_SN`, `VALUECLOUDS_DEVCODE`.
-- **No device-list discovery endpoint is confirmed yet** — the ValueClouds
-  API doesn't document one, and none was found in the reference gist. Until
-  one is researched, PN/SN/devcode must be captured manually: open the
-  SmartValue/ValueClouds web app, open browser DevTools → Network tab, and
-  inspect the query string of a `deviceDats` request. Leaving these blank
-  in `.env` runs the harness in login-only mode.
-- If a discovery endpoint *is* found during this manual capture (e.g. an
-  account/device-list call the web app makes before `deviceDats`), record
-  it in `docs/api-reference.md` and this becomes a good follow-up
-  enhancement to the harness/config flow.
+  `VALUECLOUDS_PASSWORD`, `VALUECLOUDS_PN`, `VALUECLOUDS_SN`,
+  `VALUECLOUDS_DEVCODE`.
+- **No device-list discovery endpoint exists** (confirmed absent during
+  live capture — see docs/api-reference.md). PN/SN/devcode must be
+  captured manually: open the SmartValue/ValueClouds web app, open browser
+  DevTools → Network tab, and inspect the query string of a
+  `queryDeviceOneDataxxx` (or similar `ppe/api/auth/web/...`) request.
+  Leaving these blank in `.env` runs the harness in login-only mode.
+- **Handling `.env` in this session:** don't `cat`/`grep` the raw file
+  when checking whether it's populated — that echoes plaintext credentials
+  into whatever transcript/log is capturing tool output. Use a masked
+  check instead, e.g.:
+  `awk -F= '/^VALUECLOUDS_/{print $1"="($2==""?"<empty>":"<set>")}' .env`
 
 ### What the harness does
 
 1. `POST /ppr/web/login/login` — confirms auth works, prints a truncated
-   token.
-2. If PN/SN/devcode are set, calls `GET /drt/api/auth/web/deviceDats` and
-   prints the raw positional array alongside its mapping through
-   `const.FIELD_INDEX`, so you can eyeball each value against what you
-   actually observe on the inverter/app at that moment.
-3. Saves the raw array (credentials/PII scrubbed) to
-   `tests/fixtures/sample_device_data.json` for use in mocked unit tests.
-4. Does **not** auto-edit docs — after running, manually record
-   confirmations/corrections in `docs/api-reference.md`'s "Live validation
-   findings" section based on what you observed.
+   token. Uses the corrected `{account, sha1(password), project}` shape
+   (see docs/api-reference.md) — the originally-documented plaintext
+   `{email, password}` shape does not work.
+2. If PN/SN/devcode are set, calls `GET .../queryDeviceOneDataxxx` and
+   prints every returned field (self-describing `id`/`title`/`unit`/`val`,
+   no index-guessing needed), flagging which ones fall into
+   `const.PRIMARY_TELEMETRY_IDS` (core sensors) vs. diagnostic-only.
+3. Saves the raw field list (credentials scrubbed, but real PN/SN
+   included) to `tests/fixtures/sample_device_data.json` for use in mocked
+   unit tests.
 
 ## Testing against a real HA instance
 
-_(To be filled in once Phase 1 sensor/config_flow code exists — e.g. HA
-dev container, `custom_components` symlink into a test HA config, manual
-config-flow walkthrough.)_
+_(Not yet done. Next step: HA dev container or `custom_components`
+symlink into a test HA config, then walk through the config flow UI and
+confirm sensors register correctly, Energy Dashboard picks up the energy
+entities, and diagnostics download works.)_

@@ -1,7 +1,9 @@
 # MutaTrack
 
 A Home Assistant custom integration for Must/Eybond/ValueClouds-ecosystem hybrid
-solar inverters. Status: pre-build / scaffolding.
+solar inverters. Status: core API (login + primary data endpoint) confirmed
+working live against the real account as of 2026-07-10; not yet tested
+inside an actual Home Assistant instance.
 
 ## Source of truth hierarchy
 
@@ -37,8 +39,8 @@ calls without explicit direction.
 ## Local technical docs
 
 - [docs/api-reference.md](docs/api-reference.md) — ValueClouds API endpoints,
-  auth flow, field-index map, and findings from live validation against the
-  actual account/inverter (devcode, PN/SN, confirmed vs. hypothesized fields)
+  auth flow, confirmed data endpoint (`queryDeviceOneDataxxx`), and a
+  catalogue of other discovered-but-unused endpoints for future work
 - [docs/architecture.md](docs/architecture.md) — integration file layout,
   coordinator/config-flow design decisions, entity model
 - [docs/dev-setup.md](docs/dev-setup.md) — local dev environment, running the
@@ -53,15 +55,17 @@ page rather than letting it silently drift out of sync.
 
 ## Current known-unknowns (do not treat as resolved)
 
-- Exact devcode/model for this specific inverter — unconfirmed, to be
-  discovered live via the API test harness (see docs/dev-setup.md)
-- Field-index map (45 positional fields) is reverse-engineered from a
-  different inverter's community gist, unverified against this account's
-  live data
-- Whether ValueClouds exposes any write/settings endpoints — unresearched,
-  out of scope until v2
+- Whether ValueClouds exposes a write/settings endpoint — the field ids
+  seen (`eybond_ctrl_*_read`) strongly suggest one exists, but it has
+  **deliberately not been probed or investigated**; out of scope until v2.
+  Do not attempt to find or call it without explicit direction.
+- `alm/api/auth/web/device/warnings` returns an auth error (`code 306`)
+  even with a valid token — unresolved, not blocking v1.
+- Purpose of the `secret` field returned at login — unused, unconfirmed.
 - Whether other Eybond white-label tenants share this API shape — out of
-  scope until v3
+  scope until v3.
+- Whether the field set returned by `queryDeviceOneDataxxx` is stable
+  across firmware versions — untested, only one snapshot observed so far.
 
 ## Repo/build status
 
@@ -69,9 +73,14 @@ See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the phased build
 plan and current progress. Repo is not yet pushed to GitHub — local
 scaffolding only until Phase 3.
 
-**Currently blocked on user action:** Phase 2 (live API validation) needs
-Deron to manually capture PN/SN/devcode via browser DevTools (no discovery
-endpoint is confirmed) and run `scripts/api_harness.py` against the real
-account — no agent session has network access to the real ValueClouds
-account. Until that happens, treat the field-index map and Phase 1 sensor
-code as unverified, not just "unverified" in the abstract.
+**Verified live 2026-07-10:** login and the primary data endpoint
+(`queryDeviceOneDataxxx`) both confirmed working end-to-end against
+Deron's real account via `scripts/api_harness.py`, including catching and
+fixing a real bug (the originally-documented login shape was wrong). Not
+yet tested inside an actual running Home Assistant instance.
+
+**Handling `.env`/credentials in this repo:** never `cat`/`grep` `.env`
+raw when checking its state — that echoes plaintext into tool output/logs.
+Use a masked check, e.g.
+`awk -F= '/^VALUECLOUDS_/{print $1"="($2==""?"<empty>":"<set>")}' .env`.
+See docs/dev-setup.md.

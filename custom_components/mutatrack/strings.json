@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to ValueClouds",
-        "description": "Enter your ValueClouds account credentials and your inverter's PN/SN/devcode. These are unverified against official documentation for your specific model — see the integration's docs/api-reference.md if setup fails.",
+        "description": "Enter your ValueClouds account credentials and your inverter's PN/SN/devcode. Capture these from your browser's DevTools Network tab while using the SmartValue/ValueClouds web app — see the integration's docs/dev-setup.md.",
         "data": {
           "email": "Email",
           "password": "Password",
@@ -20,42 +20,6 @@
     },
     "abort": {
       "already_configured": "This device is already configured."
-    }
-  },
-  "entity": {
-    "sensor": {
-      "battery_voltage": { "name": "Battery voltage" },
-      "pv1_voltage": { "name": "PV1 voltage" },
-      "pv2_voltage": { "name": "PV2 voltage" },
-      "inverter_voltage": { "name": "Inverter voltage" },
-      "grid_voltage": { "name": "Grid voltage" },
-      "load_current": { "name": "Load current" },
-      "battery_current": { "name": "Battery current" },
-      "inverter_current": { "name": "Inverter current" },
-      "grid_current": { "name": "Grid current" },
-      "pv_total_power": { "name": "PV total power" },
-      "load_power": { "name": "Load power" },
-      "grid_power": { "name": "Grid power" },
-      "battery_power": { "name": "Battery power" },
-      "rated_power": { "name": "Rated power" },
-      "battery_soc": { "name": "Battery state of charge" },
-      "inverter_frequency": { "name": "Inverter frequency" },
-      "grid_frequency": { "name": "Grid frequency" },
-      "ac_radiator_temperature": { "name": "AC radiator temperature" },
-      "transformer_temperature": { "name": "Transformer temperature" },
-      "dc_radiator_temperature": { "name": "DC radiator temperature" },
-      "bms_battery_temperature": { "name": "BMS battery temperature" },
-      "accumulated_charge_energy": { "name": "Accumulated charge energy" },
-      "accumulated_discharge_energy": { "name": "Accumulated discharge energy" },
-      "accumulated_buy_energy": { "name": "Accumulated grid buy energy" },
-      "accumulated_sell_energy": { "name": "Accumulated grid sell energy" },
-      "accumulated_load_energy": { "name": "Accumulated load energy" },
-      "accumulated_self_use_energy": { "name": "Accumulated self-use energy" },
-      "pv_cumulative_generation": { "name": "PV cumulative generation" },
-      "work_state": { "name": "Work state" },
-      "software_version": { "name": "Software version" },
-      "last_update_timestamp": { "name": "Last update timestamp (raw)" },
-      "charger_work_enable": { "name": "Charger work enable" }
     }
   }
 }

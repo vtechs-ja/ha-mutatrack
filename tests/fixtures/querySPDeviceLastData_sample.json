@@ -1,0 +1,356 @@
+{
+  "code": 0,
+  "data": {
+    "gts": 1783653902738,
+    "pars": {
+      "gd_": [
+        {
+          "id": "gd_eybond_read_21",
+          "par": "LineVolt_L1",
+          "val": "7.8",
+          "unit": "V",
+          "charts": false
+        },
+        {
+          "id": "gd_gridr_current",
+          "par": "LineCurr_L1",
+          "val": "0",
+          "unit": "A",
+          "charts": false
+        },
+        {
+          "id": "gd_eybond_read_23",
+          "par": "LineFreq",
+          "val": "0",
+          "unit": "Hz",
+          "charts": false
+        },
+        {
+          "id": "gd_eybond_read_116",
+          "par": "LinePowerW_L1",
+          "val": "0",
+          "unit": "W",
+          "charts": false
+        },
+        {
+          "id": "gd_eybond_read_20",
+          "par": "L1-phase active power generation",
+          "val": "0",
+          "unit": "W",
+          "charts": false
+        },
+        {
+          "id": "gd_eybond_read_127",
+          "par": "L 1-phase grid power (external sampling)",
+          "val": "0",
+          "unit": "W",
+          "charts": false
+        },
+        {
+          "id": "energy_today_to_grid",
+          "par": "GeneratedACPowerToday",
+          "val": "0",
+          "unit": "kWh",
+          "charts": true
+        },
+        {
+          "id": "energy_total_to_grid",
+          "par": "GeneratedACPowerTotal",
+          "val": "5.5",
+          "unit": "kWh",
+          "charts": true
+        },
+        {
+          "id": "gd_eybond_read_112",
+          "par": "LineVolt_L2",
+          "val": "8.5",
+          "unit": "V",
+          "charts": false
+        },
+        {
+          "id": "gd_eybond_read_113",
+          "par": "LineCurr_L2",
+          "val": "0",
+          "unit": "A",
+          "charts": false
+        },
+        {
+          "id": "gd_eybond_read_117",
+          "par": "LinePowerW_L2",
+          "val": "0",
+          "unit": "W",
+          "charts": false
+        },
+        {
+          "id": "gd_eybond_read_110",
+          "par": "GeneratedActivePower_L2",
+          "val": "0",
+          "unit": "W",
+          "charts": false
+        },
+        {
+          "id": "gd_eybond_read_128",
+          "par": "L 2-phase grid power (external sampling)",
+          "val": "0",
+          "unit": "W",
+          "charts": false
+        }
+      ],
+      "pv_": [
+        {
+          "id": "pv_eybond_read_7",
+          "par": "Pv1Volt",
+          "val": "131.2",
+          "unit": "V",
+          "charts": false
+        },
+        {
+          "id": "pv_voltage_1",
+          "par": "Pv1Curr",
+          "val": "2.6",
+          "unit": "A",
+          "charts": false
+        },
+        {
+          "id": "pv_eybond_read_9",
+          "par": "Pv1Power",
+          "val": "354",
+          "unit": "W",
+          "charts": false
+        },
+        {
+          "id": "pv_eybond_read_10",
+          "par": "Pv2Volt",
+          "val": "132.3",
+          "unit": "V",
+          "charts": false
+        },
+        {
+          "id": "pv_voltage_2",
+          "par": "Pv2Curr",
+          "val": "2.7",
+          "unit": "A",
+          "charts": false
+        },
+        {
+          "id": "pv_eybond_read_12",
+          "par": "Pv2Power",
+          "val": "358",
+          "unit": "W",
+          "charts": false
+        },
+        {
+          "id": "pv_output_power",
+          "par": "Total PV power",
+          "val": "712",
+          "unit": "W",
+          "charts": true
+        },
+        {
+          "id": "energy_today",
+          "par": "PvGeneratEnergyToday",
+          "val": "20.9",
+          "unit": "kWh",
+          "charts": true
+        },
+        {
+          "id": "energy_total",
+          "par": "PvGeneratEnergyTotal",
+          "val": "867",
+          "unit": "kWh",
+          "charts": true
+        }
+      ],
+      "sy_": [
+        {
+          "id": "sy_invvolt",
+          "par": "Output Status",
+          "val": "Inv Out",
+          "charts": false
+        },
+        {
+          "id": "sy_eybond_read_31",
+          "par": "Parallel Mode",
+          "val": "Signal",
+          "charts": false
+        },
+        {
+          "id": "sy_eybond_read_86",
+          "par": "ProductType",
+          "val": "Split Phase Mode-0",
+          "charts": false
+        },
+        {
+          "id": "sy_eybond_read_88",
+          "par": "HwVer_M1",
+          "val": "404",
+          "charts": false
+        },
+        {
+          "id": "sy_eybond_read_89",
+          "par": "HwVer_M2",
+          "val": "305",
+          "charts": false
+        }
+      ],
+      "bt_": [
+        {
+          "id": "bt_eybond_read_1",
+          "par": "BattVolt",
+          "val": "53.7",
+          "unit": "V",
+          "charts": true
+        },
+        {
+          "id": "bt_battery_current",
+          "par": "BattCurr",
+          "val": "0.2",
+          "unit": "A",
+          "charts": true
+        },
+        {
+          "id": "bt_battery_capacity",
+          "par": "BattSoc",
+          "val": "99",
+          "unit": "%",
+          "charts": false
+        },
+        {
+          "id": "battery_active_discharging_power",
+          "par": "Total battery power",
+          "val": "10",
+          "unit": "W",
+          "charts": true
+        },
+        {
+          "id": "bt_eybond_read_30",
+          "par": "Chg Status",
+          "val": "Chg Off",
+          "enumMap": {
+            "CC": "1",
+            "Float": "4",
+            "CV": "2",
+            "Chg Off": "0",
+            "Batt-Active": "8",
+            "Batt Self Test": "16"
+          },
+          "charts": false
+        },
+        {
+          "id": "battery_energy_today_charge",
+          "par": "BatChgEnergyToday",
+          "val": "12.4",
+          "unit": "kWh",
+          "charts": false
+        },
+        {
+          "id": "battery_energy_today_discharge",
+          "par": "BatDischgEnergyToday",
+          "val": "3.9",
+          "unit": "kWh",
+          "charts": false
+        }
+      ],
+      "bc_": [
+        {
+          "id": "bc_eybond_read_13",
+          "par": "OutVolt_L1",
+          "val": "120.1",
+          "unit": "V",
+          "charts": false
+        },
+        {
+          "id": "bc_eybond_read_14",
+          "par": "OutCurr_L1",
+          "val": "3",
+          "unit": "A",
+          "charts": false
+        },
+        {
+          "id": "bc_eybond_read_15",
+          "par": "OutFreq",
+          "val": "49.99",
+          "unit": "Hz",
+          "charts": false
+        },
+        {
+          "id": "bc_eybond_read_16",
+          "par": "L1 phase outputs the active power",
+          "val": "303",
+          "unit": "W",
+          "charts": false
+        },
+        {
+          "id": "bc_eybond_read_17",
+          "par": "L1 phase output apparent power",
+          "val": "362",
+          "unit": "VA",
+          "charts": false
+        },
+        {
+          "id": "bc_eybond_read_18",
+          "par": "L1 phase output load rate",
+          "val": "6",
+          "unit": "%",
+          "charts": false
+        },
+        {
+          "id": "load_active_power",
+          "par": "OutSumW",
+          "val": "537",
+          "unit": "W",
+          "charts": true
+        },
+        {
+          "id": "load_energy_today",
+          "par": "UsedEnergyToday",
+          "val": "9.1",
+          "unit": "kWh",
+          "charts": true
+        },
+        {
+          "id": "load_energy_total",
+          "par": "UsedEnergyTotal",
+          "val": "683.5",
+          "unit": "kWh",
+          "charts": true
+        },
+        {
+          "id": "bc_eybond_read_100",
+          "par": "OutVolt_L2",
+          "val": "120.1",
+          "unit": "V",
+          "charts": false
+        },
+        {
+          "id": "bc_eybond_read_101",
+          "par": "OutCurr_L2",
+          "val": "2.8",
+          "unit": "A",
+          "charts": false
+        },
+        {
+          "id": "bc_eybond_read_102",
+          "par": "OutW_L2",
+          "val": "237",
+          "unit": "W",
+          "charts": false
+        },
+        {
+          "id": "bc_eybond_read_103",
+          "par": "OutVA_L2",
+          "val": "347",
+          "unit": "VA",
+          "charts": false
+        },
+        {
+          "id": "bc_eybond_read_104",
+          "par": "LoadPercent_L2",
+          "val": "5",
+          "unit": "%",
+          "charts": false
+        }
+      ]
+    }
+  }
+}

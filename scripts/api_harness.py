@@ -113,20 +113,21 @@ async def main() -> int:
             print(f"DEVICE DATA REQUEST FAILED: {err}", file=sys.stderr)
             return 1
 
-        print(f"\nRaw field array ({len(raw_fields)} values):")
-        print(json.dumps(raw_fields, indent=2))
-
-        print("\nMapped against const.FIELD_INDEX (1-indexed):")
-        index_to_name = {v: k for k, v in const.FIELD_INDEX.items()}
-        for one_indexed_pos in sorted(index_to_name):
-            name = index_to_name[one_indexed_pos]
-            zero_indexed_pos = one_indexed_pos - 1
-            value = (
-                raw_fields[zero_indexed_pos]
-                if zero_indexed_pos < len(raw_fields)
-                else "<out of range>"
+        print(f"\nqueryDeviceOneDataxxx returned {len(raw_fields)} named fields:")
+        primary_count = sum(
+            1 for f in raw_fields if f.get("id") in const.PRIMARY_TELEMETRY_IDS
+        )
+        print(
+            f"  {primary_count} primary telemetry, "
+            f"{len(raw_fields) - primary_count} diagnostic (settings/machine info)"
+        )
+        for entry in raw_fields:
+            marker = "*" if entry.get("id") in const.PRIMARY_TELEMETRY_IDS else " "
+            print(
+                f"  {marker} {entry.get('id', ''):35} "
+                f"{entry.get('title', ''):35} "
+                f"{str(entry.get('val', '')):>15} {entry.get('unit', '') or '':5}"
             )
-            print(f"  [{one_indexed_pos:2}] {name:35} = {value!r}")
 
         FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
         fixture_path = FIXTURES_DIR / "sample_device_data.json"
@@ -134,7 +135,8 @@ async def main() -> int:
             json.dumps(
                 {
                     "captured_at": datetime.now(timezone.utc).isoformat(),
-                    "note": "Credentials/PN/SN scrubbed. Raw field array only.",
+                    "note": "Credentials/PN/SN scrubbed. Raw field list only.",
+                    "endpoint": "queryDeviceOneDataxxx",
                     "field_count": len(raw_fields),
                     "raw_fields": raw_fields,
                 },
@@ -142,12 +144,6 @@ async def main() -> int:
             )
         )
         print(f"\nSaved raw sample (no credentials) to {fixture_path}")
-        print(
-            "\nNext: compare the printed mapping against what you know is "
-            "actually true for your inverter, then record confirmations or "
-            "corrections in docs/api-reference.md's 'Live validation "
-            "findings' section."
-        )
         return 0
 
 

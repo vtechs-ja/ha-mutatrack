@@ -31,53 +31,62 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 ## Phase 1 — `custom_components/mutatrack/` skeleton
 
 - [x] `manifest.json`
-- [x] `const.py` — field index map, endpoint URLs, defaults
-- [x] `api.py` — ValueClouds client (login, deviceDats, positional-array
-      parsing, defensive/index-tolerant, one reactive re-auth retry on
-      401/403)
+- [x] `const.py` — endpoint URLs, defaults, `PRIMARY_TELEMETRY_IDS`/
+      `ENERGY_FIELD_IDS` (rewritten after Phase 2 findings — see below)
+- [x] `api.py` — ValueClouds client (login, `queryDeviceOneDataxxx`,
+      confirmed live; one reactive re-auth retry on auth failure)
 - [x] `config_flow.py` — email/password + PN/SN/devcode entry, with a login
       test before saving the entry
-- [x] `coordinator.py` — `DataUpdateCoordinator`, parses raw array into a
-      name-keyed dict tolerant of short/misaligned arrays
-- [x] `sensor.py` — entities from the field map; `device_class`/`state_class`
-      set for Energy Dashboard compatibility on cumulative kWh fields;
-      ambiguous fields (work_state, software_version, last_update_timestamp,
-      charger_work_enable) left as plain diagnostic sensors pending Phase 2
-      validation
+- [x] `coordinator.py` — `DataUpdateCoordinator`, parses the named field
+      list into an id-keyed dict
+- [x] `sensor.py` — entities built **dynamically** from whatever fields the
+      API actually returns, using the API's own `title`/`unit`; ids in
+      `PRIMARY_TELEMETRY_IDS` are regular sensors, everything else
+      (settings/control-read values, machine info) is a diagnostic-category
+      sensor
 - [x] `diagnostics.py` — redacted diagnostics export (email/password/SN)
-- [x] `strings.json` / `translations/en.json`
+- [x] `strings.json` / `translations/en.json` (static `entity.sensor` block
+      removed — names now come from the API dynamically)
 - [x] `__init__.py` — config entry setup/unload, platform forwarding
 
-Scope: v1 read-only monitoring only, per Confluence roadmap. Syntax and
-JSON validated locally; **not yet tested against a running HA instance or
-real API data** — PN/SN/devcode are required config-flow fields with no
-live device to confirm them against yet (that's Phase 2).
+Scope: v1 read-only monitoring only, per Confluence roadmap. **Rewritten
+2026-07-10** after Phase 2 live validation showed the original
+`deviceDats`-based design was built on an unverified, ultimately-replaced
+data source — see Phase 2 below. Login and device-data fetch confirmed
+live end-to-end via `scripts/api_harness.py`. **Still not tested inside an
+actual running Home Assistant instance** (config flow UI, entity
+registration, Energy Dashboard behavior all unverified in that context).
 
-## Phase 2 — Local API test harness
+## Phase 2 — Local API test harness & live validation
 
 - [x] `.env.example` (`.env` itself gitignored, user-provided)
-- [x] `scripts/api_harness.py` — login, and (if PN/SN/devcode provided)
-      fetch + map `deviceDats` against `const.FIELD_INDEX`; reuses the
-      integration's real `api.py`/`const.py` via `importlib` rather than
-      duplicating logic
-- [x] Saves raw sample response to `tests/fixtures/sample_device_data.json`
-      (credentials scrubbed) for future mocked unit tests
+- [x] `scripts/api_harness.py` — reuses the integration's real
+      `api.py`/`const.py` via `importlib` rather than duplicating logic
 - [x] **Login confirmed live 2026-07-10.** Original doc's login shape was
       wrong (`code 24`, project not found); corrected via real DevTools
       capture to `{account, sha1(password), project: "IOT"}`. Also
-      discovered the API returns HTTP 200 on both success and failure —
-      `api.py` now checks the body's `success`/`code` fields. Full details
-      in `docs/api-reference.md`.
-- [ ] **Blocked on user action:** no confirmed device-list discovery
-      endpoint exists — PN/SN/devcode must be captured manually via browser
-      DevTools (see docs/dev-setup.md) before `deviceDats` can be
-      live-validated
-- [ ] Run the harness in full device-data mode once PN/SN/devcode are
-      captured; record field-index confirmations/corrections in
-      `docs/api-reference.md`
+      discovered the API returns HTTP 200 on both success and failure.
+- [x] **PN/SN/devcode captured** via browser DevTools (`pn`, `sn`,
+      `devcode=6409`, `devaddr=255` — the last two both differ from the
+      original doc's guesses).
+- [x] **Data endpoint pivoted, confirmed live.** Collaboratively discovered
+      4 additional endpoints beyond the originally-documented `deviceDats`.
+      `queryDeviceOneDataxxx` returns 115 self-describing named fields
+      (confirmed a superset of the leaner `querySPDeviceLastData`'s 48) —
+      adopted as the sole v1 data source, replacing the blind
+      positional-array approach entirely. Full rewrite of
+      `const.py`/`api.py`/`coordinator.py`/`sensor.py` to match.
+- [x] Full pipeline (login → fetch → parse) verified live end-to-end.
+- [x] Raw sample saved to `tests/fixtures/sample_device_data.json`,
+      `queryDeviceOneDataxxx_sample.json`, `querySPDeviceLastData_sample.json`
+- [x] Other discovered endpoints documented in `docs/api-reference.md` for
+      future reference (`queryDeviceEnergyFlow` confirmed working;
+      `device/warnings` blocked on an unresolved auth requirement).
+      **Deliberately not investigated:** any write/control endpoint,
+      despite `eybond_ctrl_*_read` field ids suggesting one exists.
 
-`deviceDats`/field-index map is still unverified — only login has been
-confirmed against the real account so far.
+Phase 2 core goals are met. Remaining open items are tracked as
+known-unknowns in `docs/api-reference.md`, not blockers for Phase 3.
 
 ## Phase 3 — Repo config for HA install/update support
 

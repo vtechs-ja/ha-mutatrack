@@ -1,10 +1,11 @@
 """Thin async client for the ValueClouds cloud API.
 
-Endpoint/auth details are unverified against official documentation — see
-docs/api-reference.md. This client intentionally does no field-name mapping
-of its own; it hands back the raw positional array and lets sensor.py
-(via const.FIELD_INDEX) decide what to do with it, so a field-map
-correction never requires touching this file.
+Login and device-data shapes below are confirmed against live traffic
+2026-07-10 (see docs/api-reference.md) — not the originally-documented
+(and incorrect) shapes from the reverse-engineered community gist. This
+client hands back the raw list of {id, title, unit, val, ...} dicts from
+queryDeviceOneDataxxx untouched; coordinator.py decides what to do with it,
+so a field-list change never requires touching this file.
 """
 
 from __future__ import annotations
@@ -17,10 +18,8 @@ import aiohttp
 
 from .const import (
     DEFAULT_DEVADDR,
-    DEFAULT_PAGE,
-    DEFAULT_PAGE_SIZE,
-    DEVICE_DATS_ENDPOINT,
-    HEADER_I18N,
+    DEFAULT_I18N,
+    DEVICE_ONE_DATA_ENDPOINT,
     HEADER_PROJECT,
     LOGIN_ENDPOINT,
 )
@@ -86,9 +85,11 @@ class MutaTrackApiClient:
             raise MutaTrackApiError(f"Login request failed: {err}") from err
 
         if not (body or {}).get("success"):
-            message = (body or {}).get("message") or (body or {}).get(
-                "errorMessage"
-            ) or "Login was rejected"
+            message = (
+                (body or {}).get("message")
+                or (body or {}).get("errorMessage")
+                or "Login was rejected"
+            )
             raise MutaTrackAuthError(message)
 
         data = (body or {}).get("data") or {}
@@ -100,13 +101,20 @@ class MutaTrackApiClient:
         self._secret = data.get("secret")
         return token
 
-    async def async_get_device_data(self) -> list[Any]:
-        """Fetch the raw positional field array for the configured device.
+    async def async_get_device_data(self) -> list[dict[str, Any]]:
+        """Fetch the raw list of named field readings for the configured device.
 
-        Logs in first if there is no cached token. On a 401/403 (token
-        rejected), performs exactly one reactive re-login and retry, matching
+        Logs in first if there is no cached token. On an auth-rejection
+        response, performs exactly one reactive re-login and retry, matching
         the observed behavior of the reference implementation (see
         docs/api-reference.md) rather than a proactive TTL-based refresh.
+
+        Uses queryDeviceOneDataxxx (confirmed live 2026-07-10), which
+        returns self-describing {id, title, unit, val, packetname, ...}
+        entries — not the originally-documented deviceDats endpoint, which
+        returns an undocumented positional array with no way to verify
+        field ordering. See docs/api-reference.md for the full endpoint
+        catalogue, including other discovered endpoints not yet used here.
         """
         if self._token is None:
             await self.async_login()
@@ -118,23 +126,22 @@ class MutaTrackApiClient:
             await self.async_login()
             return await self._async_fetch_device_data()
 
-    async def _async_fetch_device_data(self) -> list[Any]:
+    async def _async_fetch_device_data(self) -> list[dict[str, Any]]:
         params = {
-            "page": DEFAULT_PAGE,
-            "pageSize": DEFAULT_PAGE_SIZE,
-            "devaddr": DEFAULT_DEVADDR,
-            "devcode": self._devcode,
             "pn": self._pn,
             "sn": self._sn,
+            "devcode": self._devcode,
+            "devaddr": DEFAULT_DEVADDR,
+            "i18n": DEFAULT_I18N,
         }
         headers = {
             "Token": self._token or "",
             "project": HEADER_PROJECT,
-            "i18n": HEADER_I18N,
+            "i18n": DEFAULT_I18N,
         }
         try:
             async with self._session.get(
-                DEVICE_DATS_ENDPOINT, params=params, headers=headers
+                DEVICE_ONE_DATA_ENDPOINT, params=params, headers=headers
             ) as resp:
                 if resp.status in (401, 403):
                     raise MutaTrackAuthError(
@@ -148,28 +155,18 @@ class MutaTrackApiClient:
         except aiohttp.ClientError as err:
             raise MutaTrackApiError(f"Device data request failed: {err}") from err
 
-        # This API returns HTTP 200 on both success and failure (confirmed
-        # on the login endpoint; assumed true here too pending live
-        # confirmation) — check the body's own success signal, not just
-        # HTTP status.
+        # Confirmed live 2026-07-10: this API returns HTTP 200 on both
+        # success and failure — check the body's own success signal, not
+        # just HTTP status.
         if (body or {}).get("success") is False:
             code = (body or {}).get("code")
-            if code in (401, 403) or "token" in str(
-                (body or {}).get("message", "")
-            ).lower():
-                raise MutaTrackAuthError(
-                    (body or {}).get("message") or "Device data request rejected"
-                )
-            raise MutaTrackApiError(
-                (body or {}).get("message") or "Device data request failed"
-            )
+            message = (body or {}).get("message") or "Device data request failed"
+            if code in (401, 403) or "token" in message.lower() or "auth" in message.lower():
+                raise MutaTrackAuthError(message)
+            raise MutaTrackApiError(message)
 
-        rows = (body or {}).get("data", {}).get("row") or []
-        if not rows:
-            raise MutaTrackApiError("Device data response contained no rows")
-
-        fields = rows[0].get("field")
+        fields = (body or {}).get("data")
         if not isinstance(fields, list):
-            raise MutaTrackApiError("Device data response 'field' was not a list")
+            raise MutaTrackApiError("Device data response 'data' was not a list")
 
         return fields
