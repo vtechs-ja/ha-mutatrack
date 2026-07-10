@@ -9,6 +9,7 @@ correction never requires touching this file.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any
 
@@ -54,10 +55,26 @@ class MutaTrackApiClient:
         self._sn = sn
         self._devcode = devcode
         self._token: str | None = None
+        self._secret: str | None = None
 
     async def async_login(self) -> str:
-        """Log in and cache the session token. Raises MutaTrackAuthError on failure."""
-        payload = {"email": self._email, "password": self._password}
+        """Log in and cache the session token. Raises MutaTrackAuthError on failure.
+
+        Confirmed against live traffic 2026-07-10: the login body requires
+        `account` (not `email`), a client-side SHA1 hash of the plaintext
+        password (not the plaintext itself), and a `project` field ("IOT")
+        identifying the white-label tenant — none of which were in the
+        original reverse-engineered doc. The API also returns HTTP 200 on
+        both success AND failure; the real signal is the `success`/`code`
+        fields in the JSON body, not the HTTP status. See
+        docs/api-reference.md for full details.
+        """
+        hashed_password = hashlib.sha1(self._password.encode("utf-8")).hexdigest()
+        payload = {
+            "account": self._email,
+            "password": hashed_password,
+            "project": "IOT",
+        }
         try:
             async with self._session.post(LOGIN_ENDPOINT, json=payload) as resp:
                 if resp.status != 200:
@@ -68,11 +85,19 @@ class MutaTrackApiClient:
         except aiohttp.ClientError as err:
             raise MutaTrackApiError(f"Login request failed: {err}") from err
 
-        token = (body or {}).get("data", {}).get("token")
+        if not (body or {}).get("success"):
+            message = (body or {}).get("message") or (body or {}).get(
+                "errorMessage"
+            ) or "Login was rejected"
+            raise MutaTrackAuthError(message)
+
+        data = (body or {}).get("data") or {}
+        token = data.get("token")
         if not token:
             raise MutaTrackAuthError("Login response did not include a token")
 
         self._token = token
+        self._secret = data.get("secret")
         return token
 
     async def async_get_device_data(self) -> list[Any]:
@@ -122,6 +147,22 @@ class MutaTrackApiClient:
                 body = await resp.json(content_type=None)
         except aiohttp.ClientError as err:
             raise MutaTrackApiError(f"Device data request failed: {err}") from err
+
+        # This API returns HTTP 200 on both success and failure (confirmed
+        # on the login endpoint; assumed true here too pending live
+        # confirmation) — check the body's own success signal, not just
+        # HTTP status.
+        if (body or {}).get("success") is False:
+            code = (body or {}).get("code")
+            if code in (401, 403) or "token" in str(
+                (body or {}).get("message", "")
+            ).lower():
+                raise MutaTrackAuthError(
+                    (body or {}).get("message") or "Device data request rejected"
+                )
+            raise MutaTrackApiError(
+                (body or {}).get("message") or "Device data request failed"
+            )
 
         rows = (body or {}).get("data", {}).get("row") or []
         if not rows:

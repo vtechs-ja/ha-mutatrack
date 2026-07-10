@@ -62,20 +62,22 @@ live device to confirm them against yet (that's Phase 2).
       duplicating logic
 - [x] Saves raw sample response to `tests/fixtures/sample_device_data.json`
       (credentials scrubbed) for future mocked unit tests
+- [x] **Login confirmed live 2026-07-10.** Original doc's login shape was
+      wrong (`code 24`, project not found); corrected via real DevTools
+      capture to `{account, sha1(password), project: "IOT"}`. Also
+      discovered the API returns HTTP 200 on both success and failure —
+      `api.py` now checks the body's `success`/`code` fields. Full details
+      in `docs/api-reference.md`.
 - [ ] **Blocked on user action:** no confirmed device-list discovery
       endpoint exists — PN/SN/devcode must be captured manually via browser
-      DevTools (see docs/dev-setup.md) before the harness can be run in
-      full device-data mode
-- [ ] **Blocked on user action:** run the harness against the real account
-      and record findings in `docs/api-reference.md`'s "Live validation
-      findings" section — confirms/corrects the field-index map and
-      confirms the actual devcode/model
+      DevTools (see docs/dev-setup.md) before `deviceDats` can be
+      live-validated
+- [ ] Run the harness in full device-data mode once PN/SN/devcode are
+      captured; record field-index confirmations/corrections in
+      `docs/api-reference.md`
 
-Verified so far: the harness's import mechanism and login-only failure path
-were smoke-tested locally (no real credentials available to this agent) —
-confirmed it loads `api.py`/`const.py` correctly without requiring
-`homeassistant` to be installed, and fails with a clear message when
-credentials are missing. **Not yet run against the live ValueClouds API.**
+`deviceDats`/field-index map is still unverified — only login has been
+confirmed against the real account so far.
 
 ## Phase 3 — Repo config for HA install/update support
 

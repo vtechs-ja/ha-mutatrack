@@ -1,22 +1,32 @@
 # ValueClouds API Reference
 
-Status: unverified — reverse-engineered from a community gist for a
-*different* inverter unit. Everything here needs live validation against
-Deron's actual account/device (Phase 2 of IMPLEMENTATION_PLAN.md) before it
-should be treated as trustworthy in shipped sensor code.
+Status: partially verified live against Deron's real account on 2026-07-10
+(login only so far). Original field-index map below is still
+unverified — reverse-engineered from a community gist for a *different*
+inverter unit. See "Live validation findings" at the bottom for what's
+confirmed vs. still hypothesis.
 
 Source: [Ig0rr0/valueclouds](https://github.com/Ig0rr0/valueclouds) gist,
 cross-referenced in the [Confluence product doc](https://vtechs.atlassian.net/wiki/spaces/VTechEng/pages/59506690/MutaTrack+Product+Brief+Starter+Tech+Spec+Roadmap).
 
-## Authentication
+## Authentication — CORRECTED 2026-07-10 against live traffic
+
+The original doc's login shape (`{email, password}`, no extra fields) does
+**not** work — it returns `code 24` ("corresponding project not found").
+Confirmed working shape, captured from real browser DevTools traffic:
 
 | Item | Detail |
 | --- | --- |
 | Login endpoint | `POST https://api.valueclouds.com/ppr/web/login/login` |
-| Payload | JSON body with account email + password |
-| Response | `data.token` — session token, no documented expiry |
-| Token use | `Token` header on subsequent requests |
-| Refresh pattern (observed) | Reactive re-login on HA start and on sensor `unavailable`, not a proactive TTL-based refresh |
+| Payload | `{"account": <email>, "password": <sha1_hex_of_plaintext_password>, "project": "IOT"}` — note field is `account`, not `email`; password is client-side SHA1-hashed, not sent plaintext; `project` is a required tenant identifier |
+| Success response | HTTP 200, body `{"code": 0, "success": true, "data": {"token", "secret", "account", "userId", ...}}` |
+| Failure response | **Also HTTP 200** — failure is signaled only by `"success": false` and a nonzero `code` in the body (e.g. `code 24` = project missing/wrong, `code 115140` = bad account/password). Any client must check the body, not just HTTP status. |
+| Token use | `Token` header on subsequent requests (assumed, consistent with deviceDats usage — not yet independently re-confirmed post-fix) |
+| `secret` field | New finding, not in the original doc. Purpose unconfirmed — possibly used for request signing on other endpoints. Not yet used by the integration; worth investigating if other endpoints require it. |
+| Refresh pattern (observed) | Reactive re-login on HA start and on sensor `unavailable`, not a proactive TTL-based refresh (this part of the original doc still stands) |
+
+`custom_components/mutatrack/api.py` has been updated to match this
+confirmed shape as of the same date.
 
 ## Data endpoint
 
@@ -76,5 +86,23 @@ cross-referenced in the [Confluence product doc](https://vtechs.atlassian.net/wi
 
 ## Live validation findings
 
-_(Empty until Phase 2 runs the test harness against the real account. Record
-confirmed devcode, PN/SN, and any field-index corrections here.)_
+**2026-07-10 — Login (confirmed):**
+- Original doc's login payload/response assumptions were wrong; corrected
+  shape is documented above and implemented in `api.py`.
+- Confirmed: this API returns HTTP 200 on both success and failure — any
+  future endpoint work must check the body's `success`/`code` fields, not
+  rely on HTTP status alone. `api.py`'s device-data path has been
+  defensively updated to do this too, though that specific path is not yet
+  independently re-confirmed live (blocked on PN/SN/devcode below).
+- New/unexplained field: login response includes a `secret` value not
+  present in the original doc. Not yet used anywhere; flag for
+  investigation if other endpoints turn out to need it (e.g. for request
+  signing).
+
+**Still open (blocked on PN/SN/devcode capture):**
+- Field-index map (45 positional fields) — unverified.
+- `Token` header usage on `deviceDats` — assumed consistent with the
+  now-corrected login flow, not independently re-tested post-fix.
+- Deron's exact inverter devcode/model.
+- Whether a device-list discovery endpoint exists (none found/documented
+  yet).
