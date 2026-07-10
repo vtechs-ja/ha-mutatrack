@@ -1,0 +1,20 @@
+# Secrets
+.env
+secrets.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Home Assistant dev config (if a local test instance lives in-repo)
+config/.storage/
+config/home-assistant.log
+config/*.db
+
+# Editor/OS
+.DS_Store
+.vscode/
+.idea/
