@@ -1,35 +1,56 @@
 # Local Dev Setup
 
-Status: planned, not yet implemented (see IMPLEMENTATION_PLAN.md Phase 2).
+Status: harness implemented (`scripts/api_harness.py`), not yet run against
+a real account (see IMPLEMENTATION_PLAN.md Phase 2).
 
 ## API test harness
 
-A standalone script (outside `custom_components/`) for validating the
-ValueClouds API directly, without needing a full Home Assistant instance
-running.
+`scripts/api_harness.py` is a standalone script (outside
+`custom_components/`) for validating the ValueClouds API directly, without
+needing a full Home Assistant instance running. It imports the
+integration's own `api.py`/`const.py` directly via `importlib` (bypassing
+`custom_components/mutatrack/__init__.py`, which has Home Assistant-only
+imports), so the field map and request logic it exercises are never a
+hand-maintained duplicate of what actually ships.
+
+### Setup
+
+```bash
+cp .env.example .env        # fill in real credentials, this file is gitignored
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python3 scripts/api_harness.py
+```
 
 ### Credentials
 
-- Copy `.env.example` to `.env` (gitignored, never commit) and fill in:
-  - `VALUECLOUDS_EMAIL`
-  - `VALUECLOUDS_PASSWORD`
-- The harness loads these from `.env` — do not hardcode credentials in any
-  script or fixture.
+- `.env` (gitignored, never commit): `VALUECLOUDS_EMAIL`,
+  `VALUECLOUDS_PASSWORD`, plus optionally `VALUECLOUDS_PN`,
+  `VALUECLOUDS_SN`, `VALUECLOUDS_DEVCODE`.
+- **No device-list discovery endpoint is confirmed yet** — the ValueClouds
+  API doesn't document one, and none was found in the reference gist. Until
+  one is researched, PN/SN/devcode must be captured manually: open the
+  SmartValue/ValueClouds web app, open browser DevTools → Network tab, and
+  inspect the query string of a `deviceDats` request. Leaving these blank
+  in `.env` runs the harness in login-only mode.
+- If a discovery endpoint *is* found during this manual capture (e.g. an
+  account/device-list call the web app makes before `deviceDats`), record
+  it in `docs/api-reference.md` and this becomes a good follow-up
+  enhancement to the harness/config flow.
 
-### What the harness should do
+### What the harness does
 
-1. `POST /ppr/web/login/login` — confirm auth works, capture the session
+1. `POST /ppr/web/login/login` — confirms auth works, prints a truncated
    token.
-2. Discover the account's device list (endpoint TBD — investigate whether
-   one exists separate from `deviceDats`) to confirm PN/SN/devcode rather
-   than requiring manual DevTools lookup.
-3. `GET /drt/api/auth/web/deviceDats` with the discovered PN/SN/devcode —
-   capture one raw response.
-4. Cross-check the raw positional array against
-   `docs/api-reference.md`'s hypothesized field map; record confirmations
-   or corrections there.
-5. Save the raw response as a fixture (with credentials/PII scrubbed) for
-   use in mocked unit tests.
+2. If PN/SN/devcode are set, calls `GET /drt/api/auth/web/deviceDats` and
+   prints the raw positional array alongside its mapping through
+   `const.FIELD_INDEX`, so you can eyeball each value against what you
+   actually observe on the inverter/app at that moment.
+3. Saves the raw array (credentials/PII scrubbed) to
+   `tests/fixtures/sample_device_data.json` for use in mocked unit tests.
+4. Does **not** auto-edit docs — after running, manually record
+   confirmations/corrections in `docs/api-reference.md`'s "Live validation
+   findings" section based on what you observed.
 
 ## Testing against a real HA instance
 

@@ -68,3 +68,10 @@ page rather than letting it silently drift out of sync.
 See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the phased build
 plan and current progress. Repo is not yet pushed to GitHub — local
 scaffolding only until Phase 3.
+
+**Currently blocked on user action:** Phase 2 (live API validation) needs
+Deron to manually capture PN/SN/devcode via browser DevTools (no discovery
+endpoint is confirmed) and run `scripts/api_harness.py` against the real
+account — no agent session has network access to the real ValueClouds
+account. Until that happens, treat the field-index map and Phase 1 sensor
+code as unverified, not just "unverified" in the abstract.

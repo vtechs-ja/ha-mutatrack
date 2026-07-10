@@ -8,6 +8,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.venv-test/
 
 # Home Assistant dev config (if a local test instance lives in-repo)
 config/.storage/

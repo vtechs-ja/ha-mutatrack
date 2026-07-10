@@ -1,0 +1,5 @@
+# Dependencies for local dev tooling (scripts/api_harness.py, tests).
+# Not used by the Home Assistant integration itself at runtime — HA
+# provides aiohttp already.
+aiohttp>=3.9
+python-dotenv>=1.0
