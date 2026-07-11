@@ -89,13 +89,13 @@ known-unknowns in `docs/api-reference.md`, not blockers for Phase 3.
 
 ## Phase 3 — Repo config for HA install/update support
 
-- [ ] `hacs.json`, HACS-compliant structure
-- [ ] README with install instructions + dashboard wiring guidance (native
+- [x] `hacs.json`, HACS-compliant structure
+- [x] README with install instructions + dashboard wiring guidance (native
       Power Sankey / Energy Distribution cards; optional community card
       pointer) — docs only, no new integration code, per Confluence 2.4
 - [ ] GitHub Actions: `hassfest` validation + HACS validation workflows
-- [ ] Versioning/release process (tags → GitHub Releases, what HACS uses for
-      updates)
+- [x] Versioning/release process (tags → GitHub Releases, what HACS uses for
+      updates) — first tag `v0.1.0` cut 2026-07-11
 - [x] User creates GitHub repo and pushes when ready (not automated) —
       done 2026-07-11: [vtechs-ja/ha-mutatrack](https://github.com/vtechs-ja/ha-mutatrack)
 
