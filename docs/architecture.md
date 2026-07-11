@@ -54,6 +54,12 @@ every poll (no new API calls). Design writeup: Confluence "Feature Roadmap
   flow, optional) if set, else an empirically-derived estimate from
   observed charge/discharge cycles (energy delta ÷ SOC delta, folded into
   an EMA), else unavailable.
+- **Low-SOC cutoff aware**: "time remaining" means time until the
+  inverter's own configured low-SOC cutoff (`eybond_ctrl_70_read`,
+  "BatStopSOC" — many setups switch to mains before full discharge, e.g.
+  10%), not until 0%. Read live every poll since it's a user-adjustable
+  inverter setting, not assumed constant. Missing/non-numeric falls back to
+  0 (pre-fix behavior: assume it can discharge to empty).
 - **Deviation detection**: if both a configured and an empirical capacity
   exist and disagree by more than 20%, an HA repair issue is raised
   (`battery_capacity_deviation`) — doubles as a degradation signal over the

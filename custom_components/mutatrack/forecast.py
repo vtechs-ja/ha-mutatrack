@@ -31,6 +31,14 @@ DISCHARGE_POWER_FIELD_ID = "battery_active_discharging_power"
 CHARGE_POWER_FIELD_ID = "eybond_read_4"
 DISCHARGE_ENERGY_TODAY_FIELD_ID = "battery_energy_today_discharge"
 CHARGE_ENERGY_TODAY_FIELD_ID = "battery_energy_today_charge"
+# The inverter's own configured low-SOC cutoff (e.g. many setups switch to
+# mains at 10% rather than fully discharging). Read live each poll rather
+# than assumed, since it's a user-adjustable inverter setting that could
+# change. "Time remaining" means time until this cutoff, not until 0% —
+# otherwise the estimate overstates real runtime by however long it'd take
+# to drain SOC the BMS will never actually use.
+STOP_SOC_FIELD_ID = "eybond_ctrl_70_read"
+DEFAULT_STOP_SOC_PERCENT = 0.0
 
 ROLLING_WINDOW = timedelta(minutes=30)
 # Below this net power, treat the battery as idle rather than charging or
@@ -51,6 +59,7 @@ Confidence = Literal["none", "low", "medium", "high"]
 class _Sample:
     timestamp: datetime
     soc_percent: float
+    stop_soc_percent: float
     net_power_w: float  # positive = discharging, negative = charging
     discharge_energy_today_kwh: float
     charge_energy_today_kwh: float
@@ -75,6 +84,7 @@ class ForecastResult:
     calibration_confidence: Confidence
     deviation_warning: bool
     observed_cycles: int
+    stop_soc_percent: float
 
 
 class BatteryForecastEngine:
@@ -108,6 +118,7 @@ class BatteryForecastEngine:
                 calibration_confidence="none",
                 deviation_warning=False,
                 observed_cycles=self._observed_cycles,
+                stop_soc_percent=DEFAULT_STOP_SOC_PERCENT,
             )
 
         self._detect_cycle_and_calibrate(sample)
@@ -123,7 +134,8 @@ class BatteryForecastEngine:
 
         seconds_remaining: float | None = None
         if capacity_kwh is not None and avg_discharge_w and avg_discharge_w > 0:
-            remaining_kwh = capacity_kwh * (sample.soc_percent / 100)
+            usable_soc_percent = max(0.0, sample.soc_percent - sample.stop_soc_percent)
+            remaining_kwh = capacity_kwh * (usable_soc_percent / 100)
             seconds_remaining = remaining_kwh / (avg_discharge_w / 1000) * 3600
 
         return ForecastResult(
@@ -134,6 +146,7 @@ class BatteryForecastEngine:
             calibration_confidence=confidence,
             deviation_warning=deviation_warning,
             observed_cycles=self._observed_cycles,
+            stop_soc_percent=sample.stop_soc_percent,
         )
 
     def _resolve_capacity(self) -> tuple[float | None, CapacitySource]:
@@ -242,6 +255,12 @@ def _sample_from_fields(fields: dict[str, dict]) -> _Sample | None:
     charge_w = _value(CHARGE_POWER_FIELD_ID)
     discharge_kwh_today = _value(DISCHARGE_ENERGY_TODAY_FIELD_ID)
     charge_kwh_today = _value(CHARGE_ENERGY_TODAY_FIELD_ID)
+    # Read live, not cached — this is a user-adjustable inverter setting.
+    # Missing/non-numeric (e.g. unsupported firmware) falls back to 0, i.e.
+    # "assume it can discharge to empty" — the pre-fix behavior.
+    stop_soc = _value(STOP_SOC_FIELD_ID)
+    if stop_soc is None:
+        stop_soc = DEFAULT_STOP_SOC_PERCENT
 
     if soc is None or discharge_w is None or charge_w is None:
         return None
@@ -251,6 +270,7 @@ def _sample_from_fields(fields: dict[str, dict]) -> _Sample | None:
     return _Sample(
         timestamp=datetime.now(),
         soc_percent=soc,
+        stop_soc_percent=stop_soc,
         net_power_w=discharge_w - charge_w,
         discharge_energy_today_kwh=discharge_kwh_today,
         charge_energy_today_kwh=charge_kwh_today,

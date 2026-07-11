@@ -176,4 +176,5 @@ class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], Se
             "calibration_confidence": forecast.calibration_confidence,
             "deviation_warning": forecast.deviation_warning,
             "observed_cycles": forecast.observed_cycles,
+            "stop_soc_percent": forecast.stop_soc_percent,
         }
