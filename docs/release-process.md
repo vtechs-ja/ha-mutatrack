@@ -25,8 +25,8 @@ Status: planned, not yet implemented (see IMPLEMENTATION_PLAN.md Phase 3).
 - Semantic version in `manifest.json`, bumped per release
 - Git tags → GitHub Releases — this is the mechanism HACS uses to detect
   and deliver updates to installed users
-- Repo hosting: new GitHub repo (e.g. `deron/ha-mutatrack`), created and
-  pushed by the user once local scaffolding is in a working state
+- Repo hosting: [vtechs-ja/ha-mutatrack](https://github.com/vtechs-ja/ha-mutatrack),
+  pushed 2026-07-11
 
 ## Future: HACS default store submission
 

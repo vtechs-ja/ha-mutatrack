@@ -13,9 +13,8 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 - **Devcode/inverter model:** unknown up front — Phase 2 must discover it
   live via the API rather than assume the community gist's field map is
   correct as-is.
-- **Repo hosting:** new GitHub repo (e.g. `deron/ha-mutatrack`), created and
-  pushed by the user once local scaffolding is in a working state — not
-  automated by the agent.
+- **Repo hosting:** [vtechs-ja/ha-mutatrack](https://github.com/vtechs-ja/ha-mutatrack),
+  created and pushed 2026-07-11.
 - **Write/control (v2):** strictly out of bounds for this build. No code,
   no architecture hooks, no TODOs implying it's imminent.
 
@@ -24,8 +23,8 @@ Status legend: `[ ]` not started, `[~]` in progress, `[x]` done.
 - [x] `git init`
 - [x] `CLAUDE.md` with source-of-truth hierarchy and links to local docs
 - [x] `IMPLEMENTATION_PLAN.md` (this file)
-- [ ] `.gitignore` (Python, HA, `.env`, secrets, `__pycache__`, etc.)
-- [ ] `docs/` scaffolding: `api-reference.md`, `architecture.md`,
+- [x] `.gitignore` (Python, HA, `.env`, secrets, `__pycache__`, etc.)
+- [x] `docs/` scaffolding: `api-reference.md`, `architecture.md`,
       `dev-setup.md`, `release-process.md`
 
 ## Phase 1 — `custom_components/mutatrack/` skeleton
@@ -97,7 +96,8 @@ known-unknowns in `docs/api-reference.md`, not blockers for Phase 3.
 - [ ] GitHub Actions: `hassfest` validation + HACS validation workflows
 - [ ] Versioning/release process (tags → GitHub Releases, what HACS uses for
       updates)
-- [ ] User creates GitHub repo and pushes when ready (not automated)
+- [x] User creates GitHub repo and pushes when ready (not automated) —
+      done 2026-07-11: [vtechs-ja/ha-mutatrack](https://github.com/vtechs-ja/ha-mutatrack)
 
 ## Confluence sync
 
