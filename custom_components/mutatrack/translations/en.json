@@ -21,5 +21,26 @@
     "abort": {
       "already_configured": "This device is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Battery runtime forecasting (optional)",
+        "description": "Both fields are optional. If you leave capacity blank, MutaTrack derives it empirically from observed charge/discharge cycles instead — see docs/architecture.md.",
+        "data": {
+          "battery_capacity_kwh": "Battery capacity (kWh)",
+          "battery_type": "Battery type"
+        }
+      }
+    },
+    "error": {
+      "invalid_capacity": "Enter a positive number, or leave blank to use an empirically-derived estimate."
+    }
+  },
+  "issues": {
+    "battery_capacity_deviation": {
+      "title": "Configured battery capacity doesn't match observed behavior",
+      "description": "The battery capacity you configured differs significantly from what MutaTrack has observed from real charge/discharge cycles. This can mean the configured value is wrong, or that the battery has degraded. Check Settings → Devices & Services → MutaTrack → Configure, and compare against the `capacity_kwh`/`capacity_source` attributes on the Battery time remaining sensor."
+    }
   }
 }

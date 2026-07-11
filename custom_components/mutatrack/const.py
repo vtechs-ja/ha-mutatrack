@@ -126,3 +126,20 @@ ENERGY_FIELD_IDS: frozenset[str] = frozenset(
 # The one field id known to represent battery state of charge — gets
 # device_class BATTERY instead of the generic "%" handling.
 BATTERY_SOC_FIELD_ID = "bt_battery_capacity"
+
+# v1.5 battery runtime forecasting (see docs/architecture.md and the
+# Confluence "Feature Roadmap & Open Questions" v1.5 section for the design
+# rationale). Capacity is not present anywhere in the API response — SOC is
+# percentage-only — so it's an optional config value with an empirical
+# fallback derived from observed charge/discharge cycles.
+CONF_BATTERY_CAPACITY_KWH = "battery_capacity_kwh"
+CONF_BATTERY_TYPE = "battery_type"
+
+BATTERY_TYPE_UNSPECIFIED = "unspecified"
+BATTERY_TYPE_OPTIONS: tuple[str, ...] = (
+    BATTERY_TYPE_UNSPECIFIED,
+    "lead_acid",
+    "lfp",
+    "li_ion",
+    "other",
+)

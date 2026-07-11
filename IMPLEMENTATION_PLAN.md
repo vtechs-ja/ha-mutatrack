@@ -99,6 +99,31 @@ known-unknowns in `docs/api-reference.md`, not blockers for Phase 3.
 - [x] User creates GitHub repo and pushes when ready (not automated) —
       done 2026-07-11: [vtechs-ja/ha-mutatrack](https://github.com/vtechs-ja/ha-mutatrack)
 
+## Phase 4 — v1.5 battery runtime forecasting
+
+Design finalized 2026-07-11 on Confluence ("Feature Roadmap & Open
+Questions" page); see docs/architecture.md's v1.5 section for the
+implementation summary.
+
+- [x] `forecast.py`: `BatteryForecastEngine` — naive instantaneous rate +
+      rolling 30-min average discharge rate tiers
+- [x] Empirical capacity self-correction from observed charge/discharge
+      cycles (energy delta ÷ SOC delta, EMA), used when no capacity is
+      configured
+- [x] Deviation detection between configured and empirical capacity → HA
+      repair issue (`battery_capacity_deviation`)
+- [x] Optional battery capacity/type config via a new options flow
+      (`MutaTrackOptionsFlow`); changing either reloads the entry
+- [x] `sensor.mutatrack_battery_time_remaining` entity wired into
+      `sensor.py`, coordinator feeds the engine every poll
+- [ ] Time-of-day recorder-history pattern tier — not implemented in this
+      cut, tracked as a follow-up
+- [ ] Verified live against Deron's real account/battery — not yet tested
+      inside a running HA instance
+- [ ] Visualization/dashboard guidance for the forecast sensor — planned as
+      a new Confluence subpage with setup steps + example dashboard config,
+      not yet written
+
 ## Confluence sync
 
 When local docs reflect a change in overall architecture or product

@@ -17,7 +17,7 @@ custom_components/mutatrack/
 ├── coordinator.py        # DataUpdateCoordinator: login, token cache, poll, re-auth on auth failure
 ├── api.py                 # Thin ValueClouds API client (login, queryDeviceOneDataxxx)
 ├── sensor.py               # Dynamically builds entities from whatever fields the API returns
-├── forecast.py              # Battery runtime projection (v1.5, not v1 — not yet built)
+├── forecast.py              # v1.5 battery runtime forecast engine (naive + rolling-average tiers, empirical capacity self-correction)
 ├── const.py                 # Endpoint URLs, defaults, PRIMARY_TELEMETRY_IDS/ENERGY_FIELD_IDS
 ├── diagnostics.py            # Redacted diagnostics download
 └── strings.json / translations/en.json
@@ -42,6 +42,34 @@ settings-write API calls — even though `queryDeviceOneDataxxx` surfaces
 current settings values (exposed as read-only diagnostics), no write
 endpoint has been probed or will be without explicit direction. See
 docs/api-reference.md's "Write endpoint" note.
+
+## v1.5 — battery runtime forecasting
+
+`forecast.py` implements `BatteryForecastEngine`, fed by `coordinator.py` on
+every poll (no new API calls). Design writeup: Confluence "Feature Roadmap
+& Open Questions" v1.5 section.
+
+- **Capacity is not present anywhere in the API response** (SOC is
+  percentage-only), so it's resolved as: user-configured value (options
+  flow, optional) if set, else an empirically-derived estimate from
+  observed charge/discharge cycles (energy delta ÷ SOC delta, folded into
+  an EMA), else unavailable.
+- **Deviation detection**: if both a configured and an empirical capacity
+  exist and disagree by more than 20%, an HA repair issue is raised
+  (`battery_capacity_deviation`) — doubles as a degradation signal over the
+  battery's life.
+- Implemented tiers: naive instantaneous rate, rolling 30-minute average
+  discharge rate. **Not implemented**: the time-of-day recorder-history
+  pattern tier — tracked as a follow-up, not this first cut.
+- Exposed as `sensor.mutatrack_battery_time_remaining` (device_class
+  `duration`, minutes), with `rate_method`/`capacity_source`/`capacity_kwh`/
+  `calibration_confidence`/`observed_cycles` as attributes for
+  transparency.
+- **In-memory only**: calibration state (empirical capacity EMA, cycle
+  count) resets on integration reload/HA restart. Acceptable for this first
+  cut; revisit if reconvergence time proves annoying in practice.
+- Options flow (`config_flow.py::MutaTrackOptionsFlow`) lets capacity/type
+  be set or changed post-setup; changing either reloads the config entry.
 
 ## Open technical risks
 

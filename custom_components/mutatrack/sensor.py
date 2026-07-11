@@ -26,6 +26,7 @@ from homeassistant.const import (
     UnitOfFrequency,
     UnitOfPower,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
@@ -71,10 +72,12 @@ async def async_setup_entry(
     for v1 given how rarely this vendor's field set is likely to change.
     """
     coordinator: MutaTrackCoordinator = hass.data[DOMAIN][config_entry.entry_id]
-    async_add_entities(
+    entities: list[SensorEntity] = [
         MutaTrackSensor(coordinator, config_entry, field_id)
         for field_id in coordinator.data
-    )
+    ]
+    entities.append(MutaTrackBatteryForecastSensor(coordinator, config_entry))
+    async_add_entities(entities)
 
 
 class MutaTrackSensor(CoordinatorEntity[MutaTrackCoordinator], SensorEntity):
@@ -127,3 +130,50 @@ class MutaTrackSensor(CoordinatorEntity[MutaTrackCoordinator], SensorEntity):
     def native_value(self):
         field = self.coordinator.data.get(self._field_id)
         return field["value"] if field else None
+
+
+class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], SensorEntity):
+    """v1.5 battery runtime forecast — see forecast.py for the engine.
+
+    Not part of the dynamic per-field sensor loop above: this is a derived
+    value, not a raw API field.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Battery time remaining"
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+
+    def __init__(
+        self, coordinator: MutaTrackCoordinator, config_entry: ConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        pn = config_entry.data[CONF_PN]
+        sn = config_entry.data[CONF_SN]
+        self._attr_unique_id = f"{pn}_{sn}_battery_time_remaining"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"{pn}_{sn}")},
+            "name": f"MutaTrack ({pn})",
+            "manufacturer": "Must / Eybond (via ValueClouds)",
+        }
+
+    @property
+    def native_value(self):
+        forecast = self.coordinator.forecast
+        if forecast is None or forecast.seconds_remaining is None:
+            return None
+        return round(forecast.seconds_remaining / 60)
+
+    @property
+    def extra_state_attributes(self):
+        forecast = self.coordinator.forecast
+        if forecast is None:
+            return {}
+        return {
+            "rate_method": forecast.rate_method,
+            "capacity_source": forecast.capacity_source,
+            "capacity_kwh": forecast.capacity_kwh,
+            "calibration_confidence": forecast.calibration_confidence,
+            "deviation_warning": forecast.deviation_warning,
+            "observed_cycles": forecast.observed_cycles,
+        }

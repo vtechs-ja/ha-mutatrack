@@ -12,10 +12,12 @@ from typing import Any, TypedDict
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import MutaTrackApiClient, MutaTrackApiError, MutaTrackAuthError
 from .const import DOMAIN
+from .forecast import BatteryForecastEngine, ForecastResult
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +42,7 @@ class MutaTrackCoordinator(DataUpdateCoordinator[dict[str, MutaTrackField]]):
         config_entry: ConfigEntry,
         api_client: MutaTrackApiClient,
         scan_interval_seconds: int,
+        battery_capacity_kwh: float | None = None,
     ) -> None:
         super().__init__(
             hass,
@@ -49,6 +52,8 @@ class MutaTrackCoordinator(DataUpdateCoordinator[dict[str, MutaTrackField]]):
             update_interval=timedelta(seconds=scan_interval_seconds),
         )
         self._api_client = api_client
+        self.forecast_engine = BatteryForecastEngine(battery_capacity_kwh)
+        self.forecast: ForecastResult | None = None
 
     async def _async_update_data(self) -> dict[str, MutaTrackField]:
         try:
@@ -60,7 +65,24 @@ class MutaTrackCoordinator(DataUpdateCoordinator[dict[str, MutaTrackField]]):
         except MutaTrackApiError as err:
             raise UpdateFailed(f"Error communicating with ValueClouds API: {err}") from err
 
-        return _parse_fields(raw_fields)
+        parsed = _parse_fields(raw_fields)
+        self.forecast = self.forecast_engine.update(parsed)
+        self._update_capacity_deviation_issue()
+        return parsed
+
+    def _update_capacity_deviation_issue(self) -> None:
+        issue_id = f"battery_capacity_deviation_{self.config_entry.entry_id}"
+        if self.forecast and self.forecast.deviation_warning:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="battery_capacity_deviation",
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
 
 def _parse_fields(raw_fields: list[dict[str, Any]]) -> dict[str, MutaTrackField]:
