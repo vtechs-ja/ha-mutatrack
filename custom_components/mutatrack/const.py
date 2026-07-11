@@ -103,6 +103,11 @@ PRIMARY_TELEMETRY_IDS: frozenset[str] = frozenset(
 # state_class TOTAL_INCREASING for Home Assistant Energy Dashboard
 # compatibility. Confirmed live via each field's "kWh" unit and
 # monotonically-accumulating name (e.g. "...Today", "...Total").
+#
+# eybond_read_97/98 ("LineChgEnergyToday"/"LoadConsumLineToday") are grid
+# import energy, not in PRIMARY_TELEMETRY_IDS (diagnostic-category), but
+# still need TOTAL_INCREASING to be selectable as Grid consumption sources
+# in the Energy Dashboard.
 ENERGY_FIELD_IDS: frozenset[str] = frozenset(
     {
         "energy_today",
@@ -113,6 +118,8 @@ ENERGY_FIELD_IDS: frozenset[str] = frozenset(
         "battery_energy_today_discharge",
         "load_energy_today",
         "load_energy_total",
+        "eybond_read_97",
+        "eybond_read_98",
     }
 )
 
