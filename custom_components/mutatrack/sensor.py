@@ -40,6 +40,8 @@ from .const import (
     DOMAIN,
     ENERGY_FIELD_IDS,
     PRIMARY_TELEMETRY_IDS,
+    PV1_POWER_FIELD_ID,
+    PV2_POWER_FIELD_ID,
 )
 from .coordinator import MutaTrackCoordinator
 
@@ -77,6 +79,10 @@ async def async_setup_entry(
         for field_id in coordinator.data
     ]
     entities.append(MutaTrackBatteryForecastSensor(coordinator, config_entry))
+    entities.append(MutaTrackBatteryCapacitySensor(coordinator, config_entry))
+    entities.append(MutaTrackRoundTripEfficiencySensor(coordinator, config_entry))
+    if PV1_POWER_FIELD_ID in coordinator.data and PV2_POWER_FIELD_ID in coordinator.data:
+        entities.append(MutaTrackPvStringBalanceSensor(coordinator, config_entry))
     async_add_entities(entities)
 
 
@@ -178,3 +184,139 @@ class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], Se
             "observed_cycles": forecast.observed_cycles,
             "stop_soc_percent": forecast.stop_soc_percent,
         }
+
+
+class MutaTrackBatteryCapacitySensor(CoordinatorEntity[MutaTrackCoordinator], SensorEntity):
+    """Standalone, graphable view of the forecast engine's active capacity.
+
+    Duplicates the `capacity_kwh` attribute on the forecast sensor, but as
+    its own entity — HA doesn't chart attributes, only entity states, and
+    watching this trend over months is the whole point (capacity fade =
+    battery degradation signal).
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Battery capacity estimate"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    # No device_class: HA's ENERGY device_class requires state_class
+    # TOTAL/TOTAL_INCREASING (a cumulative counter), but capacity can rise
+    # or fall — this is a plain measurement, so device_class is left unset.
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: MutaTrackCoordinator, config_entry: ConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        pn = config_entry.data[CONF_PN]
+        sn = config_entry.data[CONF_SN]
+        self._attr_unique_id = f"{pn}_{sn}_battery_capacity_estimate"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"{pn}_{sn}")},
+            "name": f"MutaTrack ({pn})",
+            "manufacturer": "Must / Eybond (via ValueClouds)",
+        }
+
+    @property
+    def native_value(self):
+        forecast = self.coordinator.forecast
+        if forecast is None:
+            return None
+        return forecast.capacity_kwh
+
+    @property
+    def extra_state_attributes(self):
+        forecast = self.coordinator.forecast
+        if forecast is None:
+            return {}
+        return {
+            "capacity_source": forecast.capacity_source,
+            "calibration_confidence": forecast.calibration_confidence,
+            "observed_cycles": forecast.observed_cycles,
+        }
+
+
+class MutaTrackRoundTripEfficiencySensor(CoordinatorEntity[MutaTrackCoordinator], SensorEntity):
+    """Battery round-trip efficiency (energy out / energy in per cycle).
+
+    A second, independent battery-health signal alongside capacity fade —
+    rising internal resistance shows up here even before capacity itself
+    visibly declines.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Battery round-trip efficiency"
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: MutaTrackCoordinator, config_entry: ConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        pn = config_entry.data[CONF_PN]
+        sn = config_entry.data[CONF_SN]
+        self._attr_unique_id = f"{pn}_{sn}_round_trip_efficiency"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"{pn}_{sn}")},
+            "name": f"MutaTrack ({pn})",
+            "manufacturer": "Must / Eybond (via ValueClouds)",
+        }
+
+    @property
+    def native_value(self):
+        forecast = self.coordinator.forecast
+        if forecast is None:
+            return None
+        value = forecast.round_trip_efficiency_percent
+        return round(value, 1) if value is not None else None
+
+    @property
+    def extra_state_attributes(self):
+        forecast = self.coordinator.forecast
+        if forecast is None:
+            return {}
+        return {"cycles_observed": forecast.round_trip_cycles}
+
+
+class MutaTrackPvStringBalanceSensor(CoordinatorEntity[MutaTrackCoordinator], SensorEntity):
+    """PV1 vs PV2 string power balance, as a percent deviation from even.
+
+    Only meaningful for installs where both strings are the same
+    orientation/size (confirmed true for Deron's install) — a drifting
+    ratio then signals a differential fault (soiling, shading, a failing
+    string) on one side, since both strings see the same sun at the same
+    moment and need no external weather reference to compare against each
+    other.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "PV string balance"
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: MutaTrackCoordinator, config_entry: ConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        pn = config_entry.data[CONF_PN]
+        sn = config_entry.data[CONF_SN]
+        self._attr_unique_id = f"{pn}_{sn}_pv_string_balance"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"{pn}_{sn}")},
+            "name": f"MutaTrack ({pn})",
+            "manufacturer": "Must / Eybond (via ValueClouds)",
+        }
+
+    @property
+    def native_value(self):
+        pv1 = self.coordinator.data.get(PV1_POWER_FIELD_ID)
+        pv2 = self.coordinator.data.get(PV2_POWER_FIELD_ID)
+        if not pv1 or not pv2:
+            return None
+        pv1_w, pv2_w = pv1["value"], pv2["value"]
+        if not isinstance(pv1_w, (int, float)) or not isinstance(pv2_w, (int, float)):
+            return None
+        # Below this, both strings are essentially dark (night) — the ratio
+        # is meaningless noise, not a real balance reading.
+        if pv2_w < 30:
+            return None
+        return round((pv1_w / pv2_w - 1) * 100, 1)

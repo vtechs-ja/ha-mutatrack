@@ -118,11 +118,29 @@ implementation summary.
       `sensor.py`, coordinator feeds the engine every poll
 - [ ] Time-of-day recorder-history pattern tier — not implemented in this
       cut, tracked as a follow-up
-- [ ] Verified live against Deron's real account/battery — not yet tested
-      inside a running HA instance
-- [ ] Visualization/dashboard guidance for the forecast sensor — planned as
-      a new Confluence subpage with setup steps + example dashboard config,
-      not yet written
+- [x] Verified live against Deron's real account/battery — installed and
+      exercised in his real HA instance; live testing caught and fixed the
+      low-SOC cutoff gap (v0.2.1, `BatStopSOC`)
+- [x] Visualization/dashboard guidance for the forecast sensor — written up
+      as the [Battery Forecast Dashboard Guide](https://vtechs.atlassian.net/wiki/spaces/VTechEng/pages/60555278)
+      Confluence subpage
+
+## Phase 5 — Battery/PV health signals + family dashboard ("Sundial")
+
+- [x] `sensor.mutatrack_battery_capacity_estimate` — the forecast engine's
+      capacity value promoted to its own graphable entity (v0.3.0)
+- [x] `sensor.mutatrack_battery_round_trip_efficiency` — pairs each
+      completed charge's energy-in with the next discharge's energy-out,
+      reusing the existing cycle-detection machinery (v0.3.0)
+- [x] `sensor.mutatrack_pv_string_balance` — PV1 vs PV2 power ratio,
+      self-normalizing against weather since both strings see the same sun
+      at the same moment (v0.3.0)
+- [ ] PV performance ratio (actual ÷ Forecast.Solar-expected) — designed as
+      an HA template sensor (not MutaTrack code, avoids a hard dependency
+      on another integration), not yet added to a real HA config
+- [ ] "Sundial" family dashboard — approved design (Home/Maintenance split,
+      live power-flow animation, load-timing advisor); not yet converted
+      from the design mockup into real Lovelace YAML or installed
 
 ## Confluence sync
 

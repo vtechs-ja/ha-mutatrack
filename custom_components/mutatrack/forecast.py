@@ -49,6 +49,10 @@ IDLE_DEADBAND_W = 20.0
 MIN_CYCLE_SOC_DELTA_PERCENT = 5.0
 CAPACITY_DEVIATION_WARN_RATIO = 0.20
 EMPIRICAL_CAPACITY_EMA_ALPHA = 0.3
+ROUND_TRIP_EMA_ALPHA = 0.3
+# A ratio above this is almost certainly a bad pairing (e.g. two partial
+# charges before one discharge), not real round-trip efficiency > 100%.
+ROUND_TRIP_SANITY_CEILING_PERCENT = 110.0
 
 Phase = Literal["charging", "discharging", "idle"]
 CapacitySource = Literal["configured", "empirical", "unavailable"]
@@ -85,6 +89,8 @@ class ForecastResult:
     deviation_warning: bool
     observed_cycles: int
     stop_soc_percent: float
+    round_trip_efficiency_percent: float | None
+    round_trip_cycles: int
 
 
 class BatteryForecastEngine:
@@ -102,6 +108,9 @@ class BatteryForecastEngine:
         self._empirical_capacity_kwh: float | None = None
         self._observed_cycles = 0
         self._cycle_start: _Sample | None = None
+        self._pending_charge_in_kwh: float | None = None
+        self._round_trip_efficiency_percent: float | None = None
+        self._round_trip_cycles = 0
 
     def set_configured_capacity(self, capacity_kwh: float | None) -> None:
         """Update the user-configured capacity (options flow changed)."""
@@ -119,6 +128,8 @@ class BatteryForecastEngine:
                 deviation_warning=False,
                 observed_cycles=self._observed_cycles,
                 stop_soc_percent=DEFAULT_STOP_SOC_PERCENT,
+                round_trip_efficiency_percent=self._round_trip_efficiency_percent,
+                round_trip_cycles=self._round_trip_cycles,
             )
 
         self._detect_cycle_and_calibrate(sample)
@@ -147,6 +158,8 @@ class BatteryForecastEngine:
             deviation_warning=deviation_warning,
             observed_cycles=self._observed_cycles,
             stop_soc_percent=sample.stop_soc_percent,
+            round_trip_efficiency_percent=self._round_trip_efficiency_percent,
+            round_trip_cycles=self._round_trip_cycles,
         )
 
     def _resolve_capacity(self) -> tuple[float | None, CapacitySource]:
@@ -240,6 +253,39 @@ class BatteryForecastEngine:
             self._empirical_capacity_kwh,
             self._observed_cycles,
         )
+
+        self._track_round_trip(phase, energy_delta)
+
+    def _track_round_trip(self, phase: Phase, energy_delta_kwh: float) -> None:
+        """Pair a charge's energy-in with the next discharge's energy-out.
+
+        Only pairs with the *immediately following* discharge, then clears
+        the pending charge — a rough approximation (real usage doesn't
+        cleanly alternate one full charge per one full discharge), same
+        spirit as the capacity EMA: directionally useful, not a lab-grade
+        measurement.
+        """
+        if phase == "charging":
+            self._pending_charge_in_kwh = energy_delta_kwh
+            return
+
+        if self._pending_charge_in_kwh is None or self._pending_charge_in_kwh <= 0:
+            return
+
+        observed_efficiency = min(
+            ROUND_TRIP_SANITY_CEILING_PERCENT,
+            (energy_delta_kwh / self._pending_charge_in_kwh) * 100,
+        )
+        self._pending_charge_in_kwh = None
+
+        if self._round_trip_efficiency_percent is None:
+            self._round_trip_efficiency_percent = observed_efficiency
+        else:
+            self._round_trip_efficiency_percent = (
+                ROUND_TRIP_EMA_ALPHA * observed_efficiency
+                + (1 - ROUND_TRIP_EMA_ALPHA) * self._round_trip_efficiency_percent
+            )
+        self._round_trip_cycles += 1
 
 
 def _sample_from_fields(fields: dict[str, dict]) -> _Sample | None:

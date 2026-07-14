@@ -71,6 +71,24 @@ every poll (no new API calls). Design writeup: Confluence "Feature Roadmap
   `duration`, minutes), with `rate_method`/`capacity_source`/`capacity_kwh`/
   `calibration_confidence`/`observed_cycles` as attributes for
   transparency.
+- Two further battery-health signals reuse the same cycle-detection
+  machinery, each exposed as its own graphable entity (not just an
+  attribute, since HA only charts entity state, not attributes):
+  - `sensor.mutatrack_battery_capacity_estimate` — the active capacity
+    value on its own; a declining trend over months is a capacity-fade /
+    degradation signal.
+  - `sensor.mutatrack_battery_round_trip_efficiency` — pairs each
+    completed charge's energy-in with the *next* discharge's energy-out
+    (a rough approximation, not lab-grade — real usage doesn't cleanly
+    alternate one full charge per discharge). Rising internal resistance
+    shows up here, often before capacity itself visibly declines.
+- `sensor.mutatrack_pv_string_balance` — PV1 vs PV2 string power as a
+  percent deviation from even. Only meaningful when both strings are the
+  same orientation/size (true for Deron's install); a drifting ratio
+  signals a *differential* fault (soiling/shading/failure on one side) —
+  self-normalizing against weather since both strings see the same sun at
+  the same moment, no external reference needed. Returns unavailable below
+  30W on the second string (night — ratio is meaningless noise then).
 - **In-memory only**: calibration state (empirical capacity EMA, cycle
   count) resets on integration reload/HA restart. Acceptable for this first
   cut; revisit if reconvergence time proves annoying in practice.

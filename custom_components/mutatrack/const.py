@@ -127,6 +127,14 @@ ENERGY_FIELD_IDS: frozenset[str] = frozenset(
 # device_class BATTERY instead of the generic "%" handling.
 BATTERY_SOC_FIELD_ID = "bt_battery_capacity"
 
+# PV string power fields, used by the PV string balance sensor. Both
+# strings are confirmed same orientation/size on Deron's install, so a
+# drifting ratio between them signals a differential fault (soiling,
+# partial shading, a failing string) rather than uniform degradation —
+# see docs/architecture.md and the Confluence Feature Roadmap.
+PV1_POWER_FIELD_ID = "pv_eybond_read_9"
+PV2_POWER_FIELD_ID = "pv_eybond_read_12"
+
 # v1.5 battery runtime forecasting (see docs/architecture.md and the
 # Confluence "Feature Roadmap & Open Questions" v1.5 section for the design
 # rationale). Capacity is not present anywhere in the API response — SOC is
