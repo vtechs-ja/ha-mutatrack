@@ -219,9 +219,9 @@ class MutaTrackBatteryCapacitySensor(CoordinatorEntity[MutaTrackCoordinator], Se
     @property
     def native_value(self):
         forecast = self.coordinator.forecast
-        if forecast is None:
+        if forecast is None or forecast.capacity_kwh is None:
             return None
-        return forecast.capacity_kwh
+        return round(forecast.capacity_kwh, 2)
 
     @property
     def extra_state_attributes(self):
