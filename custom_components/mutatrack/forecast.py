@@ -108,6 +108,7 @@ class BatteryForecastEngine:
         self._empirical_capacity_kwh: float | None = None
         self._observed_cycles = 0
         self._cycle_start: _Sample | None = None
+        self._active_phase: Phase | None = None
         self._pending_charge_in_kwh: float | None = None
         self._round_trip_efficiency_percent: float | None = None
         self._round_trip_cycles = 0
@@ -202,21 +203,39 @@ class BatteryForecastEngine:
     def _detect_cycle_and_calibrate(self, sample: _Sample) -> None:
         """Fold a completed charge/discharge cycle into the empirical EMA.
 
-        A cycle is bounded by phase transitions into/out of "discharging"
-        or "charging". Energy deltas come from the daily cumulative
-        counters, which reset at midnight — a cycle spanning the reset is
-        skipped (negative delta) rather than corrupting the estimate.
-        """
-        last = self._samples[-1] if self._samples else None
-        last_phase = last.phase if last else "idle"
+        A cycle spans from the first sample of a charging/discharging phase
+        until the battery flips to the *opposite* active phase. Brief idle
+        blips (a cloud passing, noise around the deadband) do NOT reset or
+        close a cycle in progress — real telemetry rarely holds a perfectly
+        clean, uninterrupted phase for the multi-percent SOC swing needed
+        to trust a reading, so treating every idle blip as a boundary meant
+        cycles almost never accumulated enough delta to complete. Energy
+        deltas are cumulative counters, so an idle stretch bridged in the
+        middle doesn't corrupt the measurement (no power = no
+        accumulation either way).
 
-        if last_phase != "discharging" and sample.phase == "discharging":
+        Energy deltas come from the daily cumulative counters, which reset
+        at midnight — a cycle spanning the reset is skipped (negative
+        delta) rather than corrupting the estimate. This is a known,
+        separate limitation (see docs/architecture.md) — a discharge
+        phase running overnight past midnight is currently dropped, not
+        fixed by this change.
+        """
+        if sample.phase == "idle":
+            return  # transient noise — leave any in-progress cycle untouched
+
+        if self._active_phase is None:
             self._cycle_start = sample
-        elif last_phase != "charging" and sample.phase == "charging":
-            self._cycle_start = sample
-        elif last_phase in ("discharging", "charging") and sample.phase != last_phase:
-            self._finish_cycle(last_phase, sample)
-            self._cycle_start = None
+            self._active_phase = sample.phase
+            return
+
+        if sample.phase == self._active_phase:
+            return  # continuing the same cycle, nothing to close
+
+        # Genuine flip to the opposite active phase — close out the old cycle.
+        self._finish_cycle(self._active_phase, sample)
+        self._cycle_start = sample
+        self._active_phase = sample.phase
 
     def _finish_cycle(self, phase: Phase, end_sample: _Sample) -> None:
         start = self._cycle_start

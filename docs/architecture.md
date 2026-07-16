@@ -67,6 +67,18 @@ every poll (no new API calls). Design writeup: Confluence "Feature Roadmap
 - Implemented tiers: naive instantaneous rate, rolling 30-minute average
   discharge rate. **Not implemented**: the time-of-day recorder-history
   pattern tier — tracked as a follow-up, not this first cut.
+- **Cycle boundaries tolerate idle blips (fixed live 2026-07-16).** A cycle
+  only closes on a genuine flip to the *opposite* active phase, not on any
+  transition through idle — a cloud passing or noise around the ±20W
+  deadband no longer resets an in-progress cycle's start point. The
+  original version reset `_cycle_start` on every re-entry into a phase,
+  which meant almost no real-world cycle accumulated enough SOC/energy
+  delta to complete (`observed_cycles` stuck at 1 for days on Deron's real
+  install). Idle stretches bridged in the middle of a cycle don't corrupt
+  the measurement — energy counters don't accumulate during idle either
+  way. The midnight day-counter-reset limitation (a cycle spanning
+  midnight is dropped, not fixed by this change) remains separate and
+  unresolved.
 - Exposed as `sensor.mutatrack_battery_time_remaining` (device_class
   `duration`, minutes), with `rate_method`/`capacity_source`/`capacity_kwh`/
   `calibration_confidence`/`observed_cycles` as attributes for
