@@ -1,13 +1,14 @@
 """Battery runtime forecasting for MutaTrack (v1.5).
 
-Computes a "time remaining" estimate purely from telemetry MutaTrack is
-already polling (SOC, instantaneous battery power, daily cumulative
-charge/discharge energy) — no new API calls. Total battery capacity is not
-present anywhere in the ValueClouds API response (SOC is percentage-only),
-so this module treats capacity as either a user-configured value or one
-derived empirically from observed charge/discharge cycles, and flags a
-deviation warning if the two disagree. Only the "naive instantaneous rate"
-and "rolling average discharge rate" tiers are implemented here; the
+Computes a "time remaining" (while discharging) or "time to full" (while
+charging) estimate purely from telemetry MutaTrack is already polling
+(SOC, instantaneous battery power, daily cumulative charge/discharge
+energy) — no new API calls. Total battery capacity is not present anywhere
+in the ValueClouds API response (SOC is percentage-only), so this module
+treats capacity as either a user-configured value or one derived
+empirically from observed charge/discharge cycles, and flags a deviation
+warning if the two disagree. Only the "naive instantaneous rate" and
+"rolling average rate" tiers are implemented here (both directions); the
 time-of-day pattern tier is tracked separately, not yet built.
 
 See docs/architecture.md and the Confluence "Feature Roadmap & Open
@@ -81,7 +82,9 @@ class _Sample:
 class ForecastResult:
     """What sensor.py exposes as the forecast entity's state/attributes."""
 
+    phase: Phase | None
     seconds_remaining: float | None
+    seconds_to_full: float | None
     rate_method: str
     capacity_source: CapacitySource
     capacity_kwh: float | None
@@ -121,7 +124,9 @@ class BatteryForecastEngine:
         sample = _sample_from_fields(fields)
         if sample is None:
             return ForecastResult(
+                phase=None,
                 seconds_remaining=None,
+                seconds_to_full=None,
                 rate_method="unavailable",
                 capacity_source="unavailable",
                 capacity_kwh=None,
@@ -142,6 +147,7 @@ class BatteryForecastEngine:
         confidence = self._calibration_confidence(capacity_source)
 
         avg_discharge_w = self._rolling_average_discharge_power_w()
+        avg_charge_w = self._rolling_average_charge_power_w()
         rate_method = "rolling_average" if len(self._samples) > 1 else "instantaneous"
 
         seconds_remaining: float | None = None
@@ -150,8 +156,25 @@ class BatteryForecastEngine:
             remaining_kwh = capacity_kwh * (usable_soc_percent / 100)
             seconds_remaining = remaining_kwh / (avg_discharge_w / 1000) * 3600
 
+        # Mirrors seconds_remaining: same capacity model, symmetric direction.
+        # Target is 100% SOC — no confirmed API field for a lower configured
+        # max-charge-SOC exists (see docs/api-reference.md's known-unknowns),
+        # so "full" means the BMS's own 100%, same simplifying assumption
+        # implicit in most systems without a custom charge ceiling. Doesn't
+        # account for charge-taper (charging usually slows near 100%), same
+        # "directionally useful, not lab-grade" spirit as the rest of this
+        # module — a straight-line estimate from the current rolling-average
+        # rate, not a curve-aware one.
+        seconds_to_full: float | None = None
+        if capacity_kwh is not None and avg_charge_w and avg_charge_w > 0:
+            needed_soc_percent = max(0.0, 100.0 - sample.soc_percent)
+            needed_kwh = capacity_kwh * (needed_soc_percent / 100)
+            seconds_to_full = needed_kwh / (avg_charge_w / 1000) * 3600
+
         return ForecastResult(
+            phase=sample.phase,
             seconds_remaining=seconds_remaining,
+            seconds_to_full=seconds_to_full,
             rate_method=rate_method,
             capacity_source=capacity_source,
             capacity_kwh=capacity_kwh,
@@ -194,6 +217,13 @@ class BatteryForecastEngine:
         if not discharging:
             return None
         return sum(s.net_power_w for s in discharging) / len(discharging)
+
+    def _rolling_average_charge_power_w(self) -> float | None:
+        charging = [s for s in self._samples if s.phase == "charging"]
+        if not charging:
+            return None
+        # net_power_w is negative while charging; flip sign to a positive rate.
+        return -sum(s.net_power_w for s in charging) / len(charging)
 
     def _evict_old_samples(self, now: datetime) -> None:
         cutoff = now - ROLLING_WINDOW

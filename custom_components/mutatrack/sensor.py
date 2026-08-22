@@ -142,11 +142,17 @@ class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], Se
     """v1.5 battery runtime forecast — see forecast.py for the engine.
 
     Not part of the dynamic per-field sensor loop above: this is a derived
-    value, not a raw API field.
+    value, not a raw API field. Dual-purpose: while discharging, state is
+    time remaining until the inverter's stop-SOC cutoff; while charging,
+    state is time to full (100% SOC). Only one direction can be non-null
+    at a time (a sample is discharging, charging, or idle, never both), so
+    the state transparently reports whichever applies — check the `phase`
+    attribute, or the `minutes_remaining`/`minutes_to_full` attributes
+    directly, to know which one is currently populated.
     """
 
     _attr_has_entity_name = True
-    _attr_name = "Battery time remaining"
+    _attr_name = "Battery time remaining / to full"
     _attr_device_class = SensorDeviceClass.DURATION
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
 
@@ -166,9 +172,13 @@ class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], Se
     @property
     def native_value(self):
         forecast = self.coordinator.forecast
-        if forecast is None or forecast.seconds_remaining is None:
+        if forecast is None:
             return None
-        return round(forecast.seconds_remaining / 60)
+        if forecast.seconds_remaining is not None:
+            return round(forecast.seconds_remaining / 60)
+        if forecast.seconds_to_full is not None:
+            return round(forecast.seconds_to_full / 60)
+        return None
 
     @property
     def extra_state_attributes(self):
@@ -176,6 +186,17 @@ class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], Se
         if forecast is None:
             return {}
         return {
+            "phase": forecast.phase,
+            "minutes_remaining": (
+                round(forecast.seconds_remaining / 60)
+                if forecast.seconds_remaining is not None
+                else None
+            ),
+            "minutes_to_full": (
+                round(forecast.seconds_to_full / 60)
+                if forecast.seconds_to_full is not None
+                else None
+            ),
             "rate_method": forecast.rate_method,
             "capacity_source": forecast.capacity_source,
             "capacity_kwh": forecast.capacity_kwh,

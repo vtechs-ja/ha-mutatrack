@@ -40,7 +40,7 @@
   "issues": {
     "battery_capacity_deviation": {
       "title": "Configured battery capacity doesn't match observed behavior",
-      "description": "The battery capacity you configured differs significantly from what MutaTrack has observed from real charge/discharge cycles. This can mean the configured value is wrong, or that the battery has degraded. Check Settings → Devices & Services → MutaTrack → Configure, and compare against the `capacity_kwh`/`capacity_source` attributes on the Battery time remaining sensor."
+      "description": "The battery capacity you configured differs significantly from what MutaTrack has observed from real charge/discharge cycles. This can mean the configured value is wrong, or that the battery has degraded. Check Settings → Devices & Services → MutaTrack → Configure, and compare against the `capacity_kwh`/`capacity_source` attributes on the Battery time remaining / to full sensor."
     }
   }
 }
