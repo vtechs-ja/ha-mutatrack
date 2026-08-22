@@ -81,7 +81,7 @@ class MutaTrackConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> MutaTrackOptionsFlow:
-        return MutaTrackOptionsFlow(config_entry)
+        return MutaTrackOptionsFlow()
 
 
 class MutaTrackOptionsFlow(config_entries.OptionsFlow):
@@ -91,9 +91,6 @@ class MutaTrackOptionsFlow(config_entries.OptionsFlow):
     blank — the forecast engine falls back to an empirically-derived
     capacity when no value is configured, per the v1.5 design.
     """
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
