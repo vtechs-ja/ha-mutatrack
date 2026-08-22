@@ -1,6 +1,7 @@
 # HA Automations Built on MutaTrack Sensors
 
-Status: **trial in progress**, started 2026-08-22. These automations live
+Status: **cut over 2026-08-22**. The spoken announcement now uses the
+phrasing developed during the trial below. These automations live
 in the Home Assistant instance's automation store (not this repo's
 `custom_components/mutatrack/` code) — MutaTrack only supplies the
 underlying sensors they trigger on and read. This doc exists so the full
@@ -200,14 +201,13 @@ or HA restart needed.
 
 ## Next steps (not yet done)
 
-- [ ] Review a few days of trial notifications (via the fetch script
-      above) against the spoken template's output.
-- [ ] Decide: cut the spoken automation over to the v5 (static, randomized
-      phrasing) message, keep both, or revert.
-- [ ] Once cut over (or if the trial is abandoned), delete
-      `automation.mutatrack_power_comfort_announcement_trial` and/or
-      `automation.mutatrack_daily_summary_via_ollama` as applicable —
-      neither has been deleted yet.
+- [x] Cut the spoken automation (`system_power_announcement.yaml`) over
+      to the v5 static-randomized-phrasing message — done 2026-08-22.
+- [ ] Delete `automation.mutatrack_power_comfort_announcement_trial`
+      (its job is done — its output is now what the spoken automation
+      uses) and `automation.mutatrack_daily_summary_via_ollama`
+      (superseded) — neither has been deleted yet, both still live on
+      the instance.
 - [ ] **Revisit real LLM-generated phrasing once on better hardware** —
       see "Model capability findings" above for exactly what to re-test
       and why it was shelved for now.
