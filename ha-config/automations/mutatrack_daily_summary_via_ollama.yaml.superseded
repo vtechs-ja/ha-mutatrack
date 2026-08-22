@@ -1,0 +1,39 @@
+# SUPERSEDED — kept only as historical/recreation reference, not slated for
+# reuse. This was the original once-daily LLM summary automation. Its
+# ai_task/Ollama call pattern was reused to build
+# power_comfort_announcement_trial.yaml, which folds LLM generation into the
+# existing 10%-crossing announcement instead of a separate once-a-day one.
+#
+# Still live on the production instance as of 2026-08-22
+# (automation.mutatrack_daily_summary_via_ollama, config id 1785417591353) —
+# pending removal once the power-comfort trial is reviewed and cut over.
+# Do not recreate this on a fresh install.
+alias: "MutaTrack Daily Summary via Ollama"
+description: "End-of-day AI summary of solar/battery performance"
+triggers:
+  - trigger: time
+    at: "21:00:00"
+conditions: []
+actions:
+  - action: ai_task.generate_data
+    data:
+      entity_id: ai_task.ollama_ai_task
+      task_name: mutatrack_daily_summary
+      instructions: >
+        You are Home Assistant. Talk directly to the homeowner about their
+        system in first person ("your system", "you") — this is a status
+        update, not a report about "the homeowner". Keep it to 3-4
+        sentences. Mention all five numbers below, don't omit any.
+
+        Use these exact numbers, don't swap or guess:
+        - Solar generated: {{ states('sensor.mutatrack_i30000251520943825_pvgeneratenergytoday') }} kWh
+        - Energy consumed: {{ states('sensor.mutatrack_i30000251520943825_usedenergytoday') }} kWh
+        - Battery charged: {{ states('sensor.mutatrack_i30000251520943825_batchgenergytoday') }} kWh
+        - Battery discharged: {{ states('sensor.mutatrack_i30000251520943825_batdischgenergytoday') }} kWh
+        - Battery charge level: {{ states('sensor.mutatrack_i30000251520943825_battsoc') }}%
+    response_variable: summary_result
+  - action: notify.persistent_notification
+    data:
+      title: "MutaTrack Daily Summary"
+      message: "{{ summary_result.data }}"
+mode: single

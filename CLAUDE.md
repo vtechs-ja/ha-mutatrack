@@ -47,6 +47,27 @@ calls without explicit direction.
   API test harness, `.env` setup, testing against a real HA instance
 - [docs/release-process.md](docs/release-process.md) — HACS structure,
   validation workflows, versioning/release/update mechanics
+- [docs/ha-automations.md](docs/ha-automations.md) — HA automations built
+  on top of MutaTrack's sensors (announcements, LLM-generated summaries),
+  with YAML exports under `ha-config/automations/`, so the live HA
+  instance's config isn't only known to whichever session set it up.
+- [docs/ha-dashboards.md](docs/ha-dashboards.md) — HA dashboards built on
+  top of MutaTrack's sensors (the "Sundial" dashboard), with an export
+  under `ha-config/dashboards/`.
+
+Both of the above are HA-side config, not integration code — they live
+outside `custom_components/mutatrack/` but are tracked here so the whole
+environment (integration + HA automations/dashboards) can be recreated on
+a fresh install. **Keep these docs and their exports in sync whenever an
+automation or dashboard that consumes MutaTrack sensors is added, changed,
+or removed on the live HA instance** — don't let it silently drift the way
+Confluence is allowed to for product-level docs. When in doubt whether the
+live HA instance has drifted from what's documented here (as happened
+2026-08-22, where a live dashboard and a template helper were already
+built but still marked not-done in `IMPLEMENTATION_PLAN.md`), check the
+instance directly (REST API for states/automations, WebSocket API's
+`lovelace/dashboards/list` + `lovelace/config` for dashboards — see
+`.env`'s `HA_URL`/`HA_TOKEN`) rather than trusting the docs alone.
 
 Update these as implementation progresses. When a change here represents a
 shift in product direction or overall architecture (not just an implementation

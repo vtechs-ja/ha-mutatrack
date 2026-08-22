@@ -1,0 +1,81 @@
+# HA Dashboard Built on MutaTrack Sensors ("Sundial")
+
+Status: **already live** on the instance as of 2026-08-22 — discovered via
+the HA WebSocket API while checking whether the repo's docs matched
+reality. `IMPLEMENTATION_PLAN.md`'s Phase 5 entry for this ("not yet
+converted from the design mockup into real Lovelace YAML or installed")
+was stale; corrected there.
+
+Like the automations in [docs/ha-automations.md](ha-automations.md), this
+dashboard lives in HA's Lovelace storage, not this repo — MutaTrack only
+supplies the underlying sensors. An export lives at
+`ha-config/dashboards/dashboard-powertrack.yaml` for recreation/review; the
+live dashboard (storage mode) is the actual source of truth.
+
+## What's there
+
+Dashboard id `dashboard_powertrack`, title "Sundial", url path
+`dashboard-powertrack`, sidebar-visible. Two views, matching the
+"Home/Maintenance split" from the approved design:
+
+- **Home** (`home`) — day-to-day glance view:
+  - A `mushroom-template-card` giving a plain-language "is now a good time
+    to run big loads" verdict, computed from PV output minus current load
+    vs. a 900W excess threshold, or SOC thresholds (>85% or <22%+low PV).
+  - A `mushroom-chips-card` row of raw numbers (PV power, load, SOC,
+    charge status).
+  - A `power-flow-card-plus` animated power-flow diagram (battery/solar/
+    grid/home), wired to MutaTrack's `total_pv_power`/`outsumw`/`battsoc`
+    plus the external `sensor.grid_power_estimate` template sensor (not
+    MutaTrack — see below).
+  - A "Today's harvest" card converting `pvgeneratenergytoday` into a kWh
+    figure plus a whimsical "≈N phone charges" conversion.
+- **Maintenance** (`maintenance`) — health/diagnostic view:
+  - A conditional alert card that only shows when the battery-forecast
+    sensor's `deviation_warning` attribute is true, pointing at
+    Settings → Repairs.
+  - `button-card` health tiles (using a shared `health_tile` template
+    defined in the dashboard) for battery capacity trend and time
+    remaining/to-full.
+  - Gauge cards for round-trip efficiency, PV string balance (both
+    MutaTrack sensors), and PV performance ratio (external, see below).
+  - An entities card exposing the forecast sensor's `capacity_source`,
+    `calibration_confidence`, and `observed_cycles` attributes for
+    debugging the forecast engine.
+
+## External dependencies (not MutaTrack, not this repo)
+
+- **Frontend custom cards** (HACS frontend resources, must be installed
+  separately from MutaTrack itself): `mushroom` (template-card,
+  chips-card), `button-card`, `power-flow-card-plus`.
+- **`sensor.grid_power_estimate`** and **`sensor.pv_performance_ratio`** —
+  HA UI-configured "Template" helper config entries (config entry domain
+  `template`, entry ids `01KXH5KVTWKBHE0SKYYP8V59Z5` and
+  `01KXH2DK7QFJW2JYY6PJTGA25N` respectively). These are deliberately kept
+  outside MutaTrack per `IMPLEMENTATION_PLAN.md`'s Phase 5 note, to avoid a
+  hard dependency on Forecast.Solar or grid-estimation logic living inside
+  this integration. Configured via the UI (Settings → Devices & Services →
+  Helpers), not YAML, so their template formulas aren't captured in this
+  repo — if recreating this dashboard elsewhere, these two helpers need to
+  be rebuilt by hand in the target instance first (PV performance ratio:
+  actual generation ÷ Forecast.Solar-expected; grid power estimate: your
+  own grid-draw estimation logic).
+
+## Recreating on a fresh install
+
+1. Install the frontend custom cards above via HACS (frontend, not
+   integrations).
+2. Recreate the two template helpers (`grid_power_estimate`,
+   `pv_performance_ratio`) if you want the Home-view power-flow card and
+   Maintenance-view performance-ratio gauge to work; otherwise the
+   conditional cards referencing them will just show unavailable/hidden.
+3. Update entity ids in `ha-config/dashboards/dashboard-powertrack.yaml`
+   from this install's `i30000251520943825` suffix to the target
+   install's actual MutaTrack entity ids (see the same note in
+   `docs/ha-automations.md`).
+4. Create a new dashboard (Settings → Dashboards → Add Dashboard →
+   "New dashboard from scratch"), then paste the YAML in edit-in-YAML
+   mode — or push it via the WebSocket API's `lovelace/config/save`
+   command (same pattern used to read it, see
+   `scripts/fetch_trial_notifications.py` for the auth/connect
+   boilerplate to adapt).

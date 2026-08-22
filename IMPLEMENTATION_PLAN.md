@@ -135,12 +135,17 @@ implementation summary.
 - [x] `sensor.mutatrack_pv_string_balance` — PV1 vs PV2 power ratio,
       self-normalizing against weather since both strings see the same sun
       at the same moment (v0.3.0)
-- [ ] PV performance ratio (actual ÷ Forecast.Solar-expected) — designed as
-      an HA template sensor (not MutaTrack code, avoids a hard dependency
-      on another integration), not yet added to a real HA config
-- [ ] "Sundial" family dashboard — approved design (Home/Maintenance split,
-      live power-flow animation, load-timing advisor); not yet converted
-      from the design mockup into real Lovelace YAML or installed
+- [x] PV performance ratio (actual ÷ Forecast.Solar-expected) — HA
+      UI-configured template helper (`sensor.pv_performance_ratio`, not
+      MutaTrack code, avoids a hard dependency on another integration);
+      confirmed live 2026-08-22 — this checkbox was stale, the helper was
+      already added
+- [x] "Sundial" family dashboard — Home/Maintenance split, live
+      power-flow animation, load-timing advisor; confirmed live
+      2026-08-22 as `dashboard-powertrack` — this checkbox was stale, it
+      was already installed. See
+      [docs/ha-dashboards.md](docs/ha-dashboards.md), exported to
+      `ha-config/dashboards/dashboard-powertrack.yaml`
 
 ## Confluence sync
 

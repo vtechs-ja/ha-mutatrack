@@ -1,0 +1,164 @@
+# Exported 2026-08-22 via HA WebSocket API (lovelace/config, url_path
+# dashboard-powertrack). Live dashboard title "Sundial", id
+# dashboard_powertrack, storage mode (not YAML-mode on the instance --
+# this file is a read-only export for recreation/review, not something HA
+# reads directly). See docs/ha-automations.md's sibling doc,
+# docs/ha-dashboards.md, for context.
+#
+# Entity ids containing "i30000251520943825" are this install's
+# inverter-serial-derived suffix -- will differ on other installs.
+button_card_templates:
+  health_tile:
+    show_name: true
+    show_state: true
+    show_icon: false
+    styles:
+      card:
+      - background: var(--card-background-color)
+      - border-radius: 14px
+      - padding: 12px 16px
+      - text-align: left
+      name:
+      - font-size: 11px
+      - text-transform: uppercase
+      - letter-spacing: 0.06em
+      - color: var(--secondary-text-color)
+      - justify-self: start
+      state:
+      - font-size: 22px
+      - font-weight: '600'
+      - font-family: '''SF Mono'', ''Roboto Mono'', monospace'
+      - justify-self: start
+views:
+- title: Home
+  path: home
+  icon: mdi:weather-sunny
+  cards:
+  - type: custom:mushroom-template-card
+    primary: '{% set pv = states(''sensor.mutatrack_i30000251520943825_total_pv_power'') | float(0) %}
+      {% set load = states(''sensor.mutatrack_i30000251520943825_outsumw'') | float(0) %} {% set soc =
+      states(''sensor.mutatrack_i30000251520943825_battsoc'') | float(0) %} {% set excess = pv - load
+      %} {% if excess > 900 or soc > 85 %}Great time to run big loads {% elif soc < 22 and pv < 50 %}Hold
+      off if you can {% else %}OK, but go easy{% endif %}'
+    secondary: '{% set pv = states(''sensor.mutatrack_i30000251520943825_total_pv_power'') | float(0)
+      %} {% set load = states(''sensor.mutatrack_i30000251520943825_outsumw'') | float(0) %} {% set soc
+      = states(''sensor.mutatrack_i30000251520943825_battsoc'') | float(0) %} {% set excess = pv - load
+      %} {% if excess > 900 or soc > 85 %}Solar''s covering the whole house with plenty left over — go
+      ahead and run the AC, washer, or dryer. {% elif soc < 22 and pv < 50 %}Battery''s getting low and
+      the sun''s down — big loads will pull from the grid. {% else %}We''re drawing some from the battery
+      right now — fine for one appliance at a time.{% endif %}'
+    icon: '{% set pv = states(''sensor.mutatrack_i30000251520943825_total_pv_power'') | float(0) %} {%
+      set load = states(''sensor.mutatrack_i30000251520943825_outsumw'') | float(0) %} {% set soc = states(''sensor.mutatrack_i30000251520943825_battsoc'')
+      | float(0) %} {% set excess = pv - load %} {% if excess > 900 or soc > 85 %}mdi:check-circle {%
+      elif soc < 22 and pv < 50 %}mdi:alert-octagon {% else %}mdi:alert{% endif %}'
+    icon_color: '{% set pv = states(''sensor.mutatrack_i30000251520943825_total_pv_power'') | float(0)
+      %} {% set load = states(''sensor.mutatrack_i30000251520943825_outsumw'') | float(0) %} {% set soc
+      = states(''sensor.mutatrack_i30000251520943825_battsoc'') | float(0) %} {% set excess = pv - load
+      %} {% if excess > 900 or soc > 85 %}green {% elif soc < 22 and pv < 50 %}red {% else %}orange{%
+      endif %}'
+  - type: custom:mushroom-chips-card
+    chips:
+    - type: entity
+      entity: sensor.mutatrack_i30000251520943825_total_pv_power
+      icon_color: orange
+    - type: entity
+      entity: sensor.mutatrack_i30000251520943825_outsumw
+      icon_color: blue
+    - type: entity
+      entity: sensor.mutatrack_i30000251520943825_battsoc
+      icon_color: green
+    - type: entity
+      entity: sensor.mutatrack_i30000251520943825_chg_status
+  - type: custom:power-flow-card-plus
+    entities:
+      battery:
+        entity: sensor.mutatrack_i30000251520943825_battsoc
+        state_of_charge: sensor.mutatrack_i30000251520943825_battsoc
+      solar:
+        entity: sensor.mutatrack_i30000251520943825_total_pv_power
+      grid:
+        entity: sensor.grid_power_estimate
+      home:
+        entity: sensor.mutatrack_i30000251520943825_outsumw
+    watt_threshold: 1000
+  - type: custom:mushroom-template-card
+    primary: Today's harvest
+    secondary: '{% set kwh = states(''sensor.mutatrack_i30000251520943825_pvgeneratenergytoday'') | float(0)
+      %} {{ kwh }} kWh — roughly {{ (kwh / 0.012) | round(0) }} phone charges'
+    icon: mdi:white-balance-sunny
+    icon_color: amber
+- title: Maintenance
+  path: maintenance
+  icon: mdi:wrench
+  cards:
+  - type: conditional
+    conditions:
+    - condition: state
+      entity: sensor.office_mutatrack_i30000251520943825_battery_time_remaining
+      attribute: deviation_warning
+      state: true
+    card:
+      type: custom:mushroom-template-card
+      primary: Configured battery capacity doesn't match observed behavior
+      secondary: Check Settings → Devices & Services → MutaTrack → Configure, and Settings → System →
+        Repairs.
+      icon: mdi:alert
+      icon_color: red
+  - type: custom:button-card
+    template: health_tile
+    entity: sensor.office_mutatrack_base_ha_battery_capacity_estimate
+    name: Battery capacity trend
+  - type: conditional
+    conditions:
+    - condition: numeric_state
+      entity: sensor.office_mutatrack_base_ha_battery_round_trip_efficiency
+      above: -1
+    card:
+      type: gauge
+      entity: sensor.office_mutatrack_base_ha_battery_round_trip_efficiency
+      name: Round-trip efficiency
+      min: 0
+      max: 100
+      severity:
+        green: 85
+        yellow: 70
+        red: 0
+  - type: gauge
+    entity: sensor.office_mutatrack_base_ha_pv_string_balance
+    name: PV string balance
+    min: -20
+    max: 20
+    severity:
+      green: -5
+      yellow: -12
+      red: -20
+  - type: conditional
+    conditions:
+    - condition: numeric_state
+      entity: sensor.pv_performance_ratio
+      above: -1
+    card:
+      type: gauge
+      entity: sensor.pv_performance_ratio
+      name: PV performance ratio
+      min: 0
+      max: 250
+  - type: custom:button-card
+    template: health_tile
+    entity: sensor.office_mutatrack_i30000251520943825_battery_time_remaining
+    name: Time remaining / to full
+  - type: entities
+    title: Forecast detail
+    entities:
+    - type: attribute
+      entity: sensor.office_mutatrack_i30000251520943825_battery_time_remaining
+      attribute: capacity_source
+      name: Capacity source
+    - type: attribute
+      entity: sensor.office_mutatrack_i30000251520943825_battery_time_remaining
+      attribute: calibration_confidence
+      name: Calibration confidence
+    - type: attribute
+      entity: sensor.office_mutatrack_i30000251520943825_battery_time_remaining
+      attribute: observed_cycles
+      name: Cycles observed
