@@ -105,6 +105,27 @@ The Maintenance view's "Battery capacity trend" card (previously a plain
 Verified both template strings render correctly against live state via
 `POST /api/template` before pushing to the dashboard.
 
+## Follow-up: both forecast cards just said "unknown" while idle (2026-08-22)
+
+With capacity configured, both "Time remaining" and "Time to full" still
+showed `unknown` — because the battery was genuinely idle (97% SOC,
+~5W net power, well inside the ±20W deadband forecast.py treats as
+noise) — neither card had anything to project from, correctly, but
+seeing two blank-looking cards side by side wasn't a great experience.
+
+Collapsed both into a single card that reads the shared `phase`
+attribute (present on both entities, since they come from the same
+`ForecastResult`) and shows whichever value is actually relevant:
+"N min remaining" while discharging, "N min to full" while charging, or
+an explicit "Battery idle" / "No active charge or discharge right now"
+otherwise. Still backed by the same two separate entities underneath —
+this is purely a smarter display choice on the dashboard side, not a
+reversion to dual-purposing one sensor's state (which was deliberately
+avoided at the entity level — see `docs/ha-automations.md`'s "Forecast
+integration" section for that reasoning). Verified all four template
+strings (primary/secondary/icon/icon_color) against live idle state
+before pushing.
+
 ## Recreating on a fresh install
 
 1. Install the frontend custom cards above via HACS (frontend, not

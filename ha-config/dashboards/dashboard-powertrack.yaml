@@ -4,13 +4,14 @@
 # this file is a read-only export for recreation/review, not something HA
 # reads directly). See docs/ha-dashboards.md for context.
 #
-# UPDATED 2026-08-22 (again, same day): Maintenance view's "Battery
-# capacity trend" card now shows both the configured and empirically-
-# derived capacity together -- active value as the primary line (with
-# a "(configured)"/"(estimated)" indicator), the alternate value
-# bracketed in the secondary line. Needs forecast.py/sensor.py's
-# configured_capacity_kwh/empirical_capacity_kwh attributes (added the
-# same day) on the underlying sensor.
+# UPDATED 2026-08-22 (yet again, same day): the separate "Time remaining"
+# and "Time to full" cards both just showed "unknown" whenever the
+# battery was idle (neither charging nor discharging) -- collapsed into
+# one card that shows whichever is relevant given the current phase, or
+# an explicit "Battery idle" status when neither applies. Still reads
+# from the same two separate entities (battery_time_remaining /
+# battery_time_to_full) -- this is purely a smarter display choice, not
+# a change to the underlying sensor model.
 #
 # Entity ids containing "i30000251520943825" are this install's
 # inverter-serial-derived suffix -- will differ on other installs.
@@ -162,14 +163,24 @@ views:
       name: PV performance ratio
       min: 0
       max: 250
-  - type: custom:button-card
-    template: health_tile
-    entity: sensor.office_mutatrack_i30000251520943825_battery_time_remaining
-    name: Time remaining
-  - type: custom:button-card
-    template: health_tile
-    entity: sensor.office_mutatrack_base_ha_battery_time_to_full
-    name: Time to full
+  - type: custom:mushroom-template-card
+    primary: '{% set phase = state_attr(''sensor.office_mutatrack_i30000251520943825_battery_time_remaining'',
+      ''phase'') %}{% set remaining = states(''sensor.office_mutatrack_i30000251520943825_battery_time_remaining'')
+      %}{% set to_full = states(''sensor.office_mutatrack_base_ha_battery_time_to_full'') %}{% if phase
+      == ''discharging'' and remaining not in [''unknown'',''unavailable''] %}{{ remaining }} min remaining{%
+      elif phase == ''charging'' and to_full not in [''unknown'',''unavailable''] %}{{ to_full }} min
+      to full{% elif phase == ''idle'' %}Battery idle{% else %}No data yet{% endif %}'
+    secondary: '{% set phase = state_attr(''sensor.office_mutatrack_i30000251520943825_battery_time_remaining'',
+      ''phase'') %}{% if phase == ''discharging'' %}Discharging{% elif phase == ''charging'' %}Charging{%
+      elif phase == ''idle'' %}No active charge or discharge right now{% else %}Waiting for data{% endif
+      %}'
+    icon: '{% set phase = state_attr(''sensor.office_mutatrack_i30000251520943825_battery_time_remaining'',
+      ''phase'') %}{% if phase == ''discharging'' %}mdi:battery-arrow-down{% elif phase == ''charging''
+      %}mdi:battery-charging{% elif phase == ''idle'' %}mdi:battery-heart-outline{% else %}mdi:battery-unknown{%
+      endif %}'
+    icon_color: '{% set phase = state_attr(''sensor.office_mutatrack_i30000251520943825_battery_time_remaining'',
+      ''phase'') %}{% if phase == ''discharging'' %}orange{% elif phase == ''charging'' %}green{% else
+      %}grey{% endif %}'
   - type: entities
     title: Forecast detail
     entities:
