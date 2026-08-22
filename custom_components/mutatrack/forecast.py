@@ -114,10 +114,15 @@ class ForecastResult:
 class BatteryForecastEngine:
     """Stateful engine, one instance per config entry, fed on every poll.
 
-    In-memory only for this first cut — calibration state (empirical
-    capacity, observed cycle count) resets on integration reload/HA
-    restart. Acceptable for v1.5's initial scope; revisit if the
-    reconvergence time after a restart proves annoying in practice.
+    Calibration state (empirical capacity, observed cycle count, round-trip
+    stats) can be persisted across integration reload/HA restart via
+    to_persisted_dict()/restore_from_persisted_dict() — see coordinator.py,
+    which saves after every update and restores once at startup before the
+    first poll. The 30-min rolling sample window and any in-progress cycle
+    are deliberately NOT persisted: the window rebuilds itself within
+    minutes of polling resuming, and losing one in-progress cycle on
+    restart just means it isn't counted — not worth the extra persistence
+    complexity for what's meant to stay a lightweight calibration cache.
     """
 
     def __init__(self, configured_capacity_kwh: float | None) -> None:
@@ -134,6 +139,25 @@ class BatteryForecastEngine:
     def set_configured_capacity(self, capacity_kwh: float | None) -> None:
         """Update the user-configured capacity (options flow changed)."""
         self._configured_capacity_kwh = capacity_kwh
+
+    def to_persisted_dict(self) -> dict[str, float | int | None]:
+        """Calibration state worth saving across restarts — see class docstring."""
+        return {
+            "empirical_capacity_kwh": self._empirical_capacity_kwh,
+            "observed_cycles": self._observed_cycles,
+            "round_trip_efficiency_percent": self._round_trip_efficiency_percent,
+            "round_trip_cycles": self._round_trip_cycles,
+        }
+
+    def restore_from_persisted_dict(self, data: dict[str, float | int | None]) -> None:
+        """Reload calibration state saved by to_persisted_dict.
+
+        Call once, right after construction, before the first update().
+        """
+        self._empirical_capacity_kwh = data.get("empirical_capacity_kwh")
+        self._observed_cycles = int(data.get("observed_cycles") or 0)
+        self._round_trip_efficiency_percent = data.get("round_trip_efficiency_percent")
+        self._round_trip_cycles = int(data.get("round_trip_cycles") or 0)
 
     def update(self, fields: dict[str, dict]) -> ForecastResult:
         sample = _sample_from_fields(fields)

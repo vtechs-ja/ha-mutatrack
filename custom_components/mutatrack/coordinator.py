@@ -13,6 +13,7 @@ from typing import Any, TypedDict
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import MutaTrackApiClient, MutaTrackApiError, MutaTrackAuthError
@@ -20,6 +21,9 @@ from .const import DOMAIN
 from .forecast import BatteryForecastEngine, ForecastResult
 
 _LOGGER = logging.getLogger(__name__)
+
+# Bump if to_persisted_dict()'s shape ever changes incompatibly.
+FORECAST_STORAGE_VERSION = 1
 
 
 class MutaTrackField(TypedDict):
@@ -54,6 +58,15 @@ class MutaTrackCoordinator(DataUpdateCoordinator[dict[str, MutaTrackField]]):
         self._api_client = api_client
         self.forecast_engine = BatteryForecastEngine(battery_capacity_kwh)
         self.forecast: ForecastResult | None = None
+        self._forecast_store: Store[dict[str, float | int | None]] = Store(
+            hass, FORECAST_STORAGE_VERSION, f"{DOMAIN}_forecast_{config_entry.entry_id}"
+        )
+
+    async def async_restore_forecast_state(self) -> None:
+        """Reload persisted calibration state — call once before first refresh."""
+        saved = await self._forecast_store.async_load()
+        if saved is not None:
+            self.forecast_engine.restore_from_persisted_dict(saved)
 
     async def _async_update_data(self) -> dict[str, MutaTrackField]:
         try:
@@ -68,6 +81,7 @@ class MutaTrackCoordinator(DataUpdateCoordinator[dict[str, MutaTrackField]]):
         parsed = _parse_fields(raw_fields)
         self.forecast = self.forecast_engine.update(parsed)
         self._update_capacity_deviation_issue()
+        await self._forecast_store.async_save(self.forecast_engine.to_persisted_dict())
         return parsed
 
     def _update_capacity_deviation_issue(self) -> None:

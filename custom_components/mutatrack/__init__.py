@@ -40,6 +40,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         scan_interval_seconds=DEFAULT_SCAN_INTERVAL_SECONDS,
         battery_capacity_kwh=entry.options.get(CONF_BATTERY_CAPACITY_KWH),
     )
+    await coordinator.async_restore_forecast_state()
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
