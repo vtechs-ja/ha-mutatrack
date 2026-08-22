@@ -40,6 +40,12 @@ CHARGE_ENERGY_TODAY_FIELD_ID = "battery_energy_today_charge"
 # to drain SOC the BMS will never actually use.
 STOP_SOC_FIELD_ID = "eybond_ctrl_70_read"
 DEFAULT_STOP_SOC_PERCENT = 0.0
+# Symmetric to STOP_SOC_FIELD_ID, same field family (adjacent control id) —
+# the inverter's own configured full-charge target, not necessarily 100%
+# on every setup. Read live for the same reason: user-adjustable inverter
+# setting.
+FULL_SOC_FIELD_ID = "eybond_ctrl_71_read"
+DEFAULT_FULL_SOC_PERCENT = 100.0
 
 ROLLING_WINDOW = timedelta(minutes=30)
 # Below this net power, treat the battery as idle rather than charging or
@@ -65,6 +71,7 @@ class _Sample:
     timestamp: datetime
     soc_percent: float
     stop_soc_percent: float
+    full_soc_percent: float
     net_power_w: float  # positive = discharging, negative = charging
     discharge_energy_today_kwh: float
     charge_energy_today_kwh: float
@@ -92,6 +99,7 @@ class ForecastResult:
     deviation_warning: bool
     observed_cycles: int
     stop_soc_percent: float
+    full_soc_percent: float
     round_trip_efficiency_percent: float | None
     round_trip_cycles: int
 
@@ -134,6 +142,7 @@ class BatteryForecastEngine:
                 deviation_warning=False,
                 observed_cycles=self._observed_cycles,
                 stop_soc_percent=DEFAULT_STOP_SOC_PERCENT,
+                full_soc_percent=DEFAULT_FULL_SOC_PERCENT,
                 round_trip_efficiency_percent=self._round_trip_efficiency_percent,
                 round_trip_cycles=self._round_trip_cycles,
             )
@@ -157,17 +166,16 @@ class BatteryForecastEngine:
             seconds_remaining = remaining_kwh / (avg_discharge_w / 1000) * 3600
 
         # Mirrors seconds_remaining: same capacity model, symmetric direction.
-        # Target is 100% SOC — no confirmed API field for a lower configured
-        # max-charge-SOC exists (see docs/api-reference.md's known-unknowns),
-        # so "full" means the BMS's own 100%, same simplifying assumption
-        # implicit in most systems without a custom charge ceiling. Doesn't
-        # account for charge-taper (charging usually slows near 100%), same
-        # "directionally useful, not lab-grade" spirit as the rest of this
-        # module — a straight-line estimate from the current rolling-average
-        # rate, not a curve-aware one.
+        # Target is the inverter's own configured full-charge SOC
+        # (full_soc_percent, read live from FULL_SOC_FIELD_ID — same field
+        # family as the stop-SOC cutoff, defaults to 100% if unsupported).
+        # Doesn't account for charge-taper (charging usually slows near
+        # full), same "directionally useful, not lab-grade" spirit as the
+        # rest of this module — a straight-line estimate from the current
+        # rolling-average rate, not a curve-aware one.
         seconds_to_full: float | None = None
         if capacity_kwh is not None and avg_charge_w and avg_charge_w > 0:
-            needed_soc_percent = max(0.0, 100.0 - sample.soc_percent)
+            needed_soc_percent = max(0.0, sample.full_soc_percent - sample.soc_percent)
             needed_kwh = capacity_kwh * (needed_soc_percent / 100)
             seconds_to_full = needed_kwh / (avg_charge_w / 1000) * 3600
 
@@ -182,6 +190,7 @@ class BatteryForecastEngine:
             deviation_warning=deviation_warning,
             observed_cycles=self._observed_cycles,
             stop_soc_percent=sample.stop_soc_percent,
+            full_soc_percent=sample.full_soc_percent,
             round_trip_efficiency_percent=self._round_trip_efficiency_percent,
             round_trip_cycles=self._round_trip_cycles,
         )
@@ -356,6 +365,10 @@ def _sample_from_fields(fields: dict[str, dict]) -> _Sample | None:
     stop_soc = _value(STOP_SOC_FIELD_ID)
     if stop_soc is None:
         stop_soc = DEFAULT_STOP_SOC_PERCENT
+    # Same read-live, same-field-family reasoning as stop_soc above.
+    full_soc = _value(FULL_SOC_FIELD_ID)
+    if full_soc is None:
+        full_soc = DEFAULT_FULL_SOC_PERCENT
 
     if soc is None or discharge_w is None or charge_w is None:
         return None
@@ -366,6 +379,7 @@ def _sample_from_fields(fields: dict[str, dict]) -> _Sample | None:
         timestamp=datetime.now(),
         soc_percent=soc,
         stop_soc_percent=stop_soc,
+        full_soc_percent=full_soc,
         net_power_w=discharge_w - charge_w,
         discharge_energy_today_kwh=discharge_kwh_today,
         charge_energy_today_kwh=charge_kwh_today,

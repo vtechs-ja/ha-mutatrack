@@ -79,6 +79,7 @@ async def async_setup_entry(
         for field_id in coordinator.data
     ]
     entities.append(MutaTrackBatteryForecastSensor(coordinator, config_entry))
+    entities.append(MutaTrackBatteryTimeToFullSensor(coordinator, config_entry))
     entities.append(MutaTrackBatteryCapacitySensor(coordinator, config_entry))
     entities.append(MutaTrackRoundTripEfficiencySensor(coordinator, config_entry))
     if PV1_POWER_FIELD_ID in coordinator.data and PV2_POWER_FIELD_ID in coordinator.data:
@@ -142,17 +143,18 @@ class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], Se
     """v1.5 battery runtime forecast — see forecast.py for the engine.
 
     Not part of the dynamic per-field sensor loop above: this is a derived
-    value, not a raw API field. Dual-purpose: while discharging, state is
-    time remaining until the inverter's stop-SOC cutoff; while charging,
-    state is time to full (100% SOC). Only one direction can be non-null
-    at a time (a sample is discharging, charging, or idle, never both), so
-    the state transparently reports whichever applies — check the `phase`
-    attribute, or the `minutes_remaining`/`minutes_to_full` attributes
-    directly, to know which one is currently populated.
+    value, not a raw API field. Discharge-side only — time remaining until
+    the inverter's stop-SOC cutoff, null whenever the battery isn't
+    discharging (including while charging). See
+    MutaTrackBatteryTimeToFullSensor below for the charging-side
+    equivalent; kept as a separate entity rather than dual-purposing this
+    one's state, since a single "duration" sensor changing what it means
+    depending on phase (still a duration, but to a different milestone)
+    would be confusing to graph/alert on.
     """
 
     _attr_has_entity_name = True
-    _attr_name = "Battery time remaining / to full"
+    _attr_name = "Battery time remaining"
     _attr_device_class = SensorDeviceClass.DURATION
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
 
@@ -172,13 +174,9 @@ class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], Se
     @property
     def native_value(self):
         forecast = self.coordinator.forecast
-        if forecast is None:
+        if forecast is None or forecast.seconds_remaining is None:
             return None
-        if forecast.seconds_remaining is not None:
-            return round(forecast.seconds_remaining / 60)
-        if forecast.seconds_to_full is not None:
-            return round(forecast.seconds_to_full / 60)
-        return None
+        return round(forecast.seconds_remaining / 60)
 
     @property
     def extra_state_attributes(self):
@@ -187,16 +185,6 @@ class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], Se
             return {}
         return {
             "phase": forecast.phase,
-            "minutes_remaining": (
-                round(forecast.seconds_remaining / 60)
-                if forecast.seconds_remaining is not None
-                else None
-            ),
-            "minutes_to_full": (
-                round(forecast.seconds_to_full / 60)
-                if forecast.seconds_to_full is not None
-                else None
-            ),
             "rate_method": forecast.rate_method,
             "capacity_source": forecast.capacity_source,
             "capacity_kwh": forecast.capacity_kwh,
@@ -204,6 +192,58 @@ class MutaTrackBatteryForecastSensor(CoordinatorEntity[MutaTrackCoordinator], Se
             "deviation_warning": forecast.deviation_warning,
             "observed_cycles": forecast.observed_cycles,
             "stop_soc_percent": forecast.stop_soc_percent,
+        }
+
+
+class MutaTrackBatteryTimeToFullSensor(CoordinatorEntity[MutaTrackCoordinator], SensorEntity):
+    """Charging-side counterpart to MutaTrackBatteryForecastSensor.
+
+    Time until the battery reaches its configured full-charge SOC
+    (forecast.py's full_soc_percent, not necessarily 100% on every setup),
+    null whenever the battery isn't charging (including while
+    discharging). Separate entity by design — see the note on
+    MutaTrackBatteryForecastSensor above.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Battery time to full"
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MINUTES
+
+    def __init__(
+        self, coordinator: MutaTrackCoordinator, config_entry: ConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        pn = config_entry.data[CONF_PN]
+        sn = config_entry.data[CONF_SN]
+        self._attr_unique_id = f"{pn}_{sn}_battery_time_to_full"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, f"{pn}_{sn}")},
+            "name": f"MutaTrack ({pn})",
+            "manufacturer": "Must / Eybond (via ValueClouds)",
+        }
+
+    @property
+    def native_value(self):
+        forecast = self.coordinator.forecast
+        if forecast is None or forecast.seconds_to_full is None:
+            return None
+        return round(forecast.seconds_to_full / 60)
+
+    @property
+    def extra_state_attributes(self):
+        forecast = self.coordinator.forecast
+        if forecast is None:
+            return {}
+        return {
+            "phase": forecast.phase,
+            "rate_method": forecast.rate_method,
+            "capacity_source": forecast.capacity_source,
+            "capacity_kwh": forecast.capacity_kwh,
+            "calibration_confidence": forecast.calibration_confidence,
+            "deviation_warning": forecast.deviation_warning,
+            "observed_cycles": forecast.observed_cycles,
+            "full_soc_percent": forecast.full_soc_percent,
         }
 
 
