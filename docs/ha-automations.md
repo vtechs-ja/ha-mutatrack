@@ -131,6 +131,66 @@ below for the full investigation, including why bigger local models
 aren't a viable alternative on this hardware, and what to revisit once
 better hardware is available.
 
+## Forecast integration (2026-08-22)
+
+The load%-based heuristic (`l1_phase_output_load_rate`/`loadpercent_l2`
+averaged, compared against a 25% threshold) used to be the only signal
+behind the at-risk/comfortable split. That's an inverter-output-utilization
+percentage, not power draw or time — a confusing proxy for "will this last
+until sunrise." MutaTrack already has a purpose-built answer:
+`forecast.py`'s `BatteryForecastEngine`, exposed as
+`sensor.mutatrack_..._battery_time_remaining` (minutes until the
+inverter's stop-SOC cutoff, only populated while discharging).
+
+The automation now compares that sensor's value against minutes until
+`sun.sun`'s `next_rising` directly — a real time-vs-time answer — and only
+falls back to the load% heuristic when the forecast sensor is
+`unknown`/`unavailable`. See the `message:` template in
+`system_power_announcement.yaml` for the exact logic.
+
+**Status: falls back to the heuristic 100% of the time right now.** The
+forecast sensor needs either a configured battery capacity or several
+observed charge/discharge cycles to calibrate (`capacity_source` is
+`unavailable` on a fresh/uncalibrated instance) — checked live 2026-08-22
+and it's still `unknown`. This isn't a bug in the automation; it's
+expected until calibration data accumulates (or a capacity is configured
+in MutaTrack's options flow).
+
+**A related gap was found and fixed the same day:** `forecast.py` only
+ever computed the discharge-side ("time remaining") estimate — while
+charging, it had nothing to report, even though the Sundial dashboard's
+Maintenance-view card was already named "Time remaining / to full" as if
+it covered both directions. Checked the dashboard's actual card
+definitions directly (`ha-config/dashboards/dashboard-powertrack.yaml`) to
+confirm: every reference, including that card, points at the single
+existing `battery_time_remaining` entity — the charging side was never a
+separate variable, just an optimistically-named title on a sensor that
+didn't do it.
+
+Added a symmetric charging-side calculation (`seconds_to_full`, rolling-
+average charge power, targeting the inverter's own configured full-charge
+SOC — read from a real API field, `eybond_ctrl_71_read`/`BattFullSOC`,
+rather than assuming 100%) as its **own separate sensor entity**,
+`sensor.mutatrack_..._battery_time_to_full` — not dual-purposing the
+existing one, since a duration sensor silently changing what milestone
+it's counting down to (depending on phase) would be confusing to
+graph/alert on. See `custom_components/mutatrack/forecast.py` and
+`sensor.py`'s git history (commits around 2026-08-22) for the full detail;
+verified with standalone script runs (both directions, plus a non-default
+full-SOC ceiling) since `forecast.py` has no HA-only imports.
+
+**This code is committed to the repo but not yet deployed to the live HA
+instance** — I only have REST/WebSocket API access to that instance, not
+filesystem/SSH access to `custom_components/mutatrack/`, so I can't copy
+the updated files over myself. Deployment (copy files, reload/restart the
+integration) is on the user to do; the automation's fallback logic means
+nothing breaks in the meantime, it just keeps using the load% heuristic
+until both (a) the code is deployed and (b) the forecast has calibrated.
+The new `battery_time_to_full` sensor isn't referenced by any automation
+yet — the night/low-SOC comfort branches this automation cares about
+should rarely coincide with charging (no PV at night), so it wasn't
+critical to wire in immediately, but it's available once useful.
+
 ## Model capability findings (2026-08-22) — revisit with better hardware
 
 This section exists so a future session (once you have a better machine
@@ -210,6 +270,14 @@ useful for any future trial-via-notification approach.
 - [ ] **Revisit real LLM-generated phrasing once on better hardware** —
       see "Model capability findings" above for exactly what to re-test
       and why it was shelved for now.
+- [ ] **Deploy the updated `forecast.py`/`sensor.py` to the live HA
+      instance** (copy over `custom_components/mutatrack/`, reload/restart
+      the integration) — committed to the repo but not yet live, see
+      "Forecast integration" above.
+- [ ] Once deployed and calibrated (configured capacity, or a few observed
+      charge/discharge cycles), confirm the automation actually takes the
+      forecast-comparison branch instead of the load% fallback on a real
+      night/low-SOC crossing.
 
 ## Dependencies for recreating this on a fresh HA install
 
