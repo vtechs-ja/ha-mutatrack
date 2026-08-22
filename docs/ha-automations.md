@@ -33,10 +33,16 @@ The decision (2026-08-22): fold the LLM-generation piece from #2 into the
 10%-crossing trigger from #1, instead of running a separate daily summary.
 The new announcement leads with the battery percentage (always) and adds a
 short comfort/risk read — reasoning about load vs. time-to-sunrise — only
-when that's actually informative (overnight, tight margins). It does not
-state the load number directly; load is an input the model reasons over,
-not part of the output. See the automation's `instructions:` template in
-`power_comfort_announcement_trial.yaml` for the exact prompt.
+when that's actually informative (overnight, tight margins).
+
+That was the original intent; in practice the local model (see "Model
+capability findings" below) wasn't reliable enough at open-ended
+generation to do this live, so the current version (v5) computes the
+comfort/risk verdict in Jinja and picks from hand-written phrasing instead
+of calling an LLM at all. Treat "LLM-generated" as the aspiration this is
+working toward, not the current implementation — see the version history
+in `power_comfort_announcement_trial.yaml`'s header comment for exactly
+what changed and why at each step.
 
 ## Current state (trial)
 
@@ -47,9 +53,12 @@ automation:
 
 - Same trigger and same 10%-crossing conditions as
   `system_power_announcement.yaml` — fires on identical events.
-- Action calls `ai_task.generate_data` (Ollama) with SOC%, load% (averaged
-  across `l1_phase_output_load_rate` / `loadpercent_l2`, not stated in the
-  output), current time, and `sun.sun`'s `next_rising`/`next_setting`.
+- Action (as of v5) computes SOC% and load% (averaged across
+  `l1_phase_output_load_rate` / `loadpercent_l2`, not stated in the output)
+  against time-of-day and picks a hand-written phrase at random — no LLM
+  call. Earlier versions (v1-v4) called `ai_task.generate_data` (Ollama)
+  instead; see the "Model capability findings" section below for why that
+  was rolled back for now.
 - Posts the result as a `persistent_notification` (text), rather than
   speaking it — this is deliberate, so the spoken experience is unchanged
   during review.
@@ -89,6 +98,96 @@ comment. Still an open question whether this holds up over several days
 of real crossings, or whether the model needs swapping for something
 larger — that's what the remaining trial period is for.
 
+**Personality attempt, then rollback to static phrasing, 2026-08-22 (v5):**
+asked the v4 prompt to sound warmer/less bland. Tested two directions
+directly against `ai_task.generate_data` (bypassing the automation each
+time, same safe method as above):
+- A tone instruction ("warm, friendly, conversational... not a robotic
+  readout") — sometimes genuinely better ("but don't worry, it'll easily
+  make it to sunrise"), but reintroduced the v1 failure modes in roughly
+  a third of runs: duplicated paragraphs restating the same idea, and
+  invented details never given in the prompt (e.g. "It's getting pretty
+  dark in this area").
+- A few-shot example ("match this style: 'Battery's down to 15 percent,
+  and it's tight overnight...'") — worse: the model pattern-matched the
+  example's structure but sometimes hallucinated a completely wrong SOC
+  (output "The battery's 75% charge..." when told 15 percent), or
+  produced generic filler ("a moderate load will keep the battery charged
+  for a relatively long time").
+
+Conclusion: this model's reliability ceiling sits right around the
+"state the fact, add one deterministic-verdict sentence" level (v4) —
+asking for more expressiveness costs more in hallucination/repetition
+than it gains in tone. **Rolled back to static, hand-written phrasing**
+(v5, current): the same four branches as v4, but each maps to a short
+list of pre-written variants picked at random via Jinja's `| random` —
+no model call at all for this automation. Gets some rotation/personality
+without the latency or reliability cost. See "Model capability findings"
+below for the full investigation, including why bigger local models
+aren't a viable alternative on this hardware, and what to revisit once
+better hardware is available.
+
+## Model capability findings (2026-08-22) — revisit with better hardware
+
+This section exists so a future session (once you have a better machine
+running Ollama, or move to a hosted LLM) can pick the LLM-generation idea
+back up without repeating this investigation from scratch.
+
+**What's actually available on this instance's Ollama add-on** (queried
+directly via `GET http://homeassistant.local:11434/api/tags`, which is
+reachable from this dev machine over LAN even though the add-on's internal
+Docker hostname `76e18fb5-ollama` is not):
+
+| Model | Params | Size on disk |
+| --- | --- | --- |
+| `llama3.2:1b-instruct-q4_K_M` | 1.2B | 0.81 GB — **currently used by `ai_task.ollama_ai_task`** |
+| `tinyllama:latest` | 1B | 0.64 GB |
+| `llama3.2:latest` | 3.2B | 2.02 GB |
+| `qwen3:4b-instruct` | 4.0B | 2.50 GB |
+| `qwen2.5:latest` | 7.6B | 4.68 GB |
+
+All five are already pulled — trying a bigger one needs a config change to
+which model backs the `ai_task` entity, not a download.
+
+**Why bigger wasn't tried further:** timed a trivial one-line prompt
+(`"Say hello in one sentence."`) directly against `llama3.2:latest` (3.2B,
+already pulled) via `POST http://homeassistant.local:11434/api/generate` —
+**it took 104 seconds.** The 1B model that's currently in use responds in
+roughly a couple of seconds for comparable prompts. This strongly suggests
+the host has no GPU acceleration and is CPU-bound enough that anything
+above ~1-1.2B params is impractical for a notification that should follow
+a real-time state change, not show up a minute or two later. Two calls (one
+timed out at 60s, one completed at 104s) were made directly against the
+add-on to establish this — outside of any automation, so they didn't touch
+MutaTrack or HA config, but they did occupy the Ollama add-on's CPU for
+that duration on the live production host. Checked HA core and the Ollama
+add-on's lightweight `/api/tags` endpoint immediately afterward — both
+responded instantly, so nothing crashed or hung, but there's **no
+host-level CPU/RAM telemetry available** (no `systemmonitor` integration
+installed on this instance) to say precisely how close to the edge it got.
+Worth installing `systemmonitor` before running any further multi-model
+experiments like this, or doing them from a lower-priority time window.
+
+**What to revisit once you have better hardware (GPU-accelerated, or a
+hosted LLM API):**
+1. Re-run the personality prompts documented above (tone instruction,
+   few-shot example) against `llama3.2:latest`, `qwen3:4b-instruct`, or
+   `qwen2.5:latest` — larger models are generally much more reliable at
+   following "don't invent details" / "don't repeat yourself" instructions
+   under more expressive asks, so the hallucination/repetition problems
+   seen here may simply not recur.
+2. If latency is still a concern even on better hardware, consider a
+   hosted API (Anthropic/OpenAI/etc.) instead of local Ollama — trades
+   local-only/no-cost for reliable low-latency generation. Would need a
+   new HA integration/config entry, not just a model swap.
+3. Restore the v4-style prompt (deterministic verdict decided in Jinja,
+   model only phrases it — see `power_comfort_announcement_trial.yaml`'s
+   git history for the exact wording) as the starting point, then layer
+   the personality ask back on top once a larger/hosted model is in play.
+4. Install `systemmonitor` first so any future multi-model comparison has
+   real CPU/RAM numbers to reason from, rather than just "did HA stay
+   responsive."
+
 **Retrieving trial output for review:** persistent_notification entities
 are queryable over the HA REST API without any config change, so
 `scripts/fetch_trial_notifications.py` pulls the full series (filter by
@@ -103,13 +202,15 @@ or HA restart needed.
 
 - [ ] Review a few days of trial notifications (via the fetch script
       above) against the spoken template's output.
-- [ ] Decide: cut the spoken automation over to the LLM-generated message
-      (swap `tts.speak`'s templated `message:` for the `ai_task` +
-      response-variable pattern), keep both, or revert.
+- [ ] Decide: cut the spoken automation over to the v5 (static, randomized
+      phrasing) message, keep both, or revert.
 - [ ] Once cut over (or if the trial is abandoned), delete
       `automation.mutatrack_power_comfort_announcement_trial` and/or
       `automation.mutatrack_daily_summary_via_ollama` as applicable —
       neither has been deleted yet.
+- [ ] **Revisit real LLM-generated phrasing once on better hardware** —
+      see "Model capability findings" above for exactly what to re-test
+      and why it was shelved for now.
 
 ## Dependencies for recreating this on a fresh HA install
 

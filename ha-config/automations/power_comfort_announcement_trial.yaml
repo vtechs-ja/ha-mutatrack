@@ -3,14 +3,13 @@
 # automation.mutatrack_power_comfort_announcement_trial
 #
 # Goal: replace the templated TTS announcement (system_power_announcement.yaml)
-# with an LLM-generated one, reusing the ai_task/Ollama call pattern from the
+# with a more expressive one, reusing the ai_task/Ollama call pattern from the
 # now-superseded daily summary automation (see docs/ha-automations.md). Runs
 # in PARALLEL as a text notification for a few days of review before any
 # decision to cut the spoken automation over.
 #
 # Same trigger/conditions as system_power_announcement.yaml, so it fires on
-# the identical SOC-crossing events. Only the action differs: generate text
-# via ai_task, post as a persistent_notification instead of speaking it.
+# the identical SOC-crossing events. Only the action differs.
 #
 # Entity ids containing "i30000251520943825" are this install's inverter
 # serial-derived suffix — see the note in system_power_announcement.yaml.
@@ -37,21 +36,36 @@
 #   v2: shortened instructions, still asked the model to reason about
 #       comfort/risk itself -> coherent but sometimes hallucinated
 #       numbers or refused to give a verdict ("it is not clear whether...")
-#   v3/v4 (this version): comfort/risk verdict is now decided
-#       deterministically in the Jinja template (mirrors the Home view's
-#       existing threshold logic on the Sundial dashboard, see
-#       ha-config/dashboards/dashboard-powertrack.yaml) — night hours +
-#       SOC<40 + load>25% picks the "at risk" prompt branch, night+SOC<40
-#       otherwise picks "comfortable," 100% picks "fully charged," anything
-#       else just states the percentage. The model's only job per branch
-#       is turning an already-decided outcome into 1-2 short sentences,
-#       never to reason or reference exact numbers. This is a far easier
-#       task for a 1B model and came back consistent and coherent across
-#       repeated test calls for every branch. Prompt may be tightened
-#       further (or the model swapped for a larger one) depending on how
-#       real crossings look over the next few days.
+#   v3/v4: comfort/risk verdict decided deterministically in the Jinja
+#       template (mirrors the Home view's existing threshold logic on the
+#       Sundial dashboard, see ha-config/dashboards/dashboard-powertrack.yaml)
+#       — model's only job per branch is turning an already-decided outcome
+#       into 1-2 short sentences. Consistent and coherent across repeated
+#       test calls, but read as bland/static.
+#
+# REPLACED WITH STATIC RANDOMIZED PHRASING 2026-08-22 (v5, this version):
+# asked for "more personality" — tested tone-instruction and few-shot-example
+# prompt variants directly against ai_task.generate_data (bypassing the
+# automation each time) to see if warmer phrasing was achievable. Both
+# reintroduced the v1 failure modes (duplicated/rambling output, invented
+# details like "it's getting pretty dark in this area", a hallucinated
+# "75%" in place of the real SOC) more often than not — the 1B model's
+# reliability ceiling is lower than the "bland but correct" v4 prompt was
+# already sitting at. See docs/ha-automations.md's "Model capability
+# findings" section for the full writeup, including why bigger local
+# models aren't a viable fix on this hardware (measured ~104s for a
+# trivial one-line prompt on the already-downloaded llama3.2:latest/3.2B —
+# no GPU acceleration on this host).
+#
+# The LLM/ai_task call is removed entirely for now. Personality comes from
+# a short hand-written list of phrasings per branch (same four branches as
+# v4), picked at random via Jinja's `| random` filter — zero latency, zero
+# hallucination risk, some rotation instead of the same sentence every
+# time. This is the pragmatic stopgap until better (GPU-accelerated or
+# hosted) hardware makes real LLM-generated phrasing viable again — see
+# docs/ha-automations.md for what to revisit then.
 alias: "MutaTrack Power Comfort Announcement (Trial)"
-description: "Trial: LLM-generated comfort announcement as text, parallel to the spoken template"
+description: "Trial: hand-written comfort announcement (randomized per-branch phrasing), parallel to the spoken template"
 triggers:
   - trigger: state
     entity_id: sensor.mutatrack_i30000251520943825_battsoc
@@ -66,27 +80,30 @@ conditions:
     value_template: >
       {{ (trigger.from_state.state | int(0) // 10) != (trigger.to_state.state | int(0) // 10) }}
 actions:
-  - action: ai_task.generate_data
+  - action: notify.persistent_notification
     data:
-      entity_id: ai_task.ollama_ai_task
-      task_name: mutatrack_power_comfort
-      instructions: >
+      title: "Power Comfort (Trial)"
+      message: >
         {% set soc = trigger.to_state.state | int(0) %}
         {% set load = ((states('sensor.mutatrack_i30000251520943825_l1_phase_output_load_rate')|float(0) + states('sensor.mutatrack_i30000251520943825_loadpercent_l2')|float(0)) / 2) | round(0) %}
         {% set hour = now().hour %}
         {% set is_night = hour >= 21 or hour < 6 %}
         {% if soc == 100 %}
-        Say in one short sentence that the battery is fully charged. Output only that sentence, nothing else.
+        {% set phrases = ["Battery's fully charged.", "You're topped off at 100 percent.", "Fully charged and ready to go."] %}
         {% elif is_night and soc < 40 and load > 25 %}
-        Say in one short sentence that the battery is at {{ soc }} percent. Then in one more short sentence, warn that it may run out of charge before sunrise given how much power is being used right now. Do not mention any specific numbers. Output only those two sentences, nothing else.
+        {% set phrases = [
+          "Battery's down to " ~ soc ~ " percent, and it's tight overnight -- worth easing off non-essentials.",
+          "You're at " ~ soc ~ " percent with load running high; you could be cutting it close before sunrise.",
+          soc ~ " percent and dropping fast -- might be worth switching off anything you don't need right now."
+        ] %}
         {% elif is_night and soc < 40 %}
-        Say in one short sentence that the battery is at {{ soc }} percent. Then in one more short sentence, reassure that it should comfortably last until sunrise given how little power is being used right now. Do not mention any specific numbers. Output only those two sentences, nothing else.
+        {% set phrases = [
+          "Battery's at " ~ soc ~ " percent, but load's light enough that you'll comfortably make it to sunrise.",
+          "You're at " ~ soc ~ " percent overnight -- nothing to worry about with how little you're drawing right now.",
+          soc ~ " percent and holding steady; you should coast through to sunrise just fine."
+        ] %}
         {% else %}
-        Say in one short sentence that the battery is at {{ soc }} percent. Output only that sentence, nothing else.
+        {% set phrases = ["Battery's at " ~ soc ~ " percent.", "You're sitting at " ~ soc ~ " percent right now.", "Charge level: " ~ soc ~ " percent."] %}
         {% endif %}
-    response_variable: comfort_result
-  - action: notify.persistent_notification
-    data:
-      title: "Power Comfort (Trial)"
-      message: "{{ comfort_result.data }}"
+        {{ phrases | random }}
 mode: single
