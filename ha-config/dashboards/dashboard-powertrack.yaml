@@ -4,12 +4,13 @@
 # this file is a read-only export for recreation/review, not something HA
 # reads directly). See docs/ha-dashboards.md for context.
 #
-# UPDATED 2026-08-22: Maintenance view's "Time remaining / to full" card
-# was only ever wired to the discharge-only battery_time_remaining
-# entity -- the charging side (battery_time_to_full, added in v0.4.0)
-# was never actually shown here despite the card's name implying it was
-# covered. Split into two cards: "Time remaining" (unchanged entity) and
-# "Time to full" (the new entity).
+# UPDATED 2026-08-22 (again, same day): Maintenance view's "Battery
+# capacity trend" card now shows both the configured and empirically-
+# derived capacity together -- active value as the primary line (with
+# a "(configured)"/"(estimated)" indicator), the alternate value
+# bracketed in the secondary line. Needs forecast.py/sensor.py's
+# configured_capacity_kwh/empirical_capacity_kwh attributes (added the
+# same day) on the underlying sensor.
 #
 # Entity ids containing "i30000251520943825" are this install's
 # inverter-serial-derived suffix -- will differ on other installs.
@@ -110,10 +111,22 @@ views:
         Repairs.
       icon: mdi:alert
       icon_color: red
-  - type: custom:button-card
-    template: health_tile
-    entity: sensor.office_mutatrack_base_ha_battery_capacity_estimate
-    name: Battery capacity trend
+  - type: custom:mushroom-template-card
+    primary: '{% set active = states(''sensor.office_mutatrack_base_ha_battery_capacity_estimate'') %}{%
+      set src = state_attr(''sensor.office_mutatrack_base_ha_battery_capacity_estimate'', ''capacity_source'')
+      %}{% if active in [''unknown'',''unavailable''] %}No capacity data yet{% else %}{{ active }} kWh
+      ({{ ''configured'' if src == ''configured'' else ''estimated'' if src == ''empirical'' else src
+      }}){% endif %}'
+    secondary: '{% set src = state_attr(''sensor.office_mutatrack_base_ha_battery_capacity_estimate'',
+      ''capacity_source'') %}{% set configured = state_attr(''sensor.office_mutatrack_base_ha_battery_capacity_estimate'',
+      ''configured_capacity_kwh'') %}{% set empirical = state_attr(''sensor.office_mutatrack_base_ha_battery_capacity_estimate'',
+      ''empirical_capacity_kwh'') %}{% if src == ''configured'' %}{% if empirical is not none %}(estimated:
+      {{ empirical }} kWh){% else %}(no estimate yet -- needs a few charge/discharge cycles){% endif %}{%
+      elif src == ''empirical'' %}{% if configured is not none %}(configured: {{ configured }} kWh){%
+      else %}(no capacity configured){% endif %}{% else %}Configure a capacity, or wait for a few charge/discharge
+      cycles{% endif %}'
+    icon: mdi:battery-heart-variant
+    icon_color: blue
   - type: conditional
     conditions:
     - condition: numeric_state

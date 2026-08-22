@@ -293,6 +293,12 @@ class MutaTrackBatteryCapacitySensor(CoordinatorEntity[MutaTrackCoordinator], Se
             "capacity_source": forecast.capacity_source,
             "calibration_confidence": forecast.calibration_confidence,
             "observed_cycles": forecast.observed_cycles,
+            "configured_capacity_kwh": forecast.configured_capacity_kwh,
+            "empirical_capacity_kwh": (
+                round(forecast.empirical_capacity_kwh, 2)
+                if forecast.empirical_capacity_kwh is not None
+                else None
+            ),
         }
 
 

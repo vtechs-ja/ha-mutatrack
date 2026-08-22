@@ -83,6 +83,28 @@ Fixed by splitting it into two adjacent cards, "Time remaining" and
 `lovelace/config/save` over the WebSocket API, and re-exported to
 `ha-config/dashboards/dashboard-powertrack.yaml`.
 
+## Follow-up: showing configured vs. estimated capacity together (2026-08-22)
+
+After setting a configured capacity (12 kWh), asked to see both the
+configured and empirically-derived values together — active one as the
+main line, the alternate bracketed, with an indication of which is
+active. `forecast.py`'s `ForecastResult` only exposed the already-resolved
+`capacity_kwh`/`capacity_source` (the active value), not the two raw
+inputs behind it, so `configured_capacity_kwh`/`empirical_capacity_kwh`
+were added alongside them and exposed as attributes on
+`sensor.mutatrack_..._battery_capacity_estimate`.
+
+The Maintenance view's "Battery capacity trend" card (previously a plain
+`button-card` showing just the active value) is now a
+`mushroom-template-card`:
+- Primary: `"{{ active }} kWh (configured|estimated)"`
+- Secondary: the alternate value bracketed, e.g. `"(estimated: 11.4 kWh)"`
+  or `"(configured: 12.0 kWh)"` — or a hint that no estimate/configured
+  value exists yet if either side is missing.
+
+Verified both template strings render correctly against live state via
+`POST /api/template` before pushing to the dashboard.
+
 ## Recreating on a fresh install
 
 1. Install the frontend custom cards above via HACS (frontend, not

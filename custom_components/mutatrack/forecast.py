@@ -102,6 +102,11 @@ class ForecastResult:
     rate_method: str
     capacity_source: CapacitySource
     capacity_kwh: float | None
+    # Raw values behind capacity_kwh/capacity_source, exposed alongside the
+    # active one so UI can show "active value (source), alternate in
+    # brackets" rather than only ever seeing whichever one currently won.
+    configured_capacity_kwh: float | None
+    empirical_capacity_kwh: float | None
     calibration_confidence: Confidence
     deviation_warning: bool
     observed_cycles: int
@@ -169,6 +174,8 @@ class BatteryForecastEngine:
                 rate_method="unavailable",
                 capacity_source="unavailable",
                 capacity_kwh=None,
+                configured_capacity_kwh=self._configured_capacity_kwh,
+                empirical_capacity_kwh=self._empirical_capacity_kwh,
                 calibration_confidence="none",
                 deviation_warning=False,
                 observed_cycles=self._observed_cycles,
@@ -216,6 +223,8 @@ class BatteryForecastEngine:
             rate_method=rate_method,
             capacity_source=capacity_source,
             capacity_kwh=capacity_kwh,
+            configured_capacity_kwh=self._configured_capacity_kwh,
+            empirical_capacity_kwh=self._empirical_capacity_kwh,
             calibration_confidence=confidence,
             deviation_warning=deviation_warning,
             observed_cycles=self._observed_cycles,
