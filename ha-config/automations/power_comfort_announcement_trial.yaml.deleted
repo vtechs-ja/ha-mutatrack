@@ -1,3 +1,7 @@
+# DELETED 2026-08-22: superseded once system_power_announcement.yaml was
+# cut over to this automation's v5 phrasing (see docs/ha-automations.md).
+# Kept only as a reference/recreation copy — not live on the instance.
+#
 # Trial automation, created 2026-08-22 via the HA REST API
 # (POST /api/config/automation/config/1787376439276). Live entity id:
 # automation.mutatrack_power_comfort_announcement_trial

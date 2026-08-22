@@ -1,18 +1,24 @@
 # HA Automations Built on MutaTrack Sensors
 
-Status: **cut over 2026-08-22**. The spoken announcement now uses the
-phrasing developed during the trial below. These automations live
-in the Home Assistant instance's automation store (not this repo's
-`custom_components/mutatrack/` code) — MutaTrack only supplies the
-underlying sensors they trigger on and read. This doc exists so the full
-environment (HA config + this repo) can be recreated on a fresh install,
-and so the trial's rationale/status isn't lost between sessions.
+Status: **cut over and cleaned up 2026-08-22**. Only one automation is
+live now — `system_power_announcement.yaml` — using the phrasing
+developed during the trial documented below. The trial automation and the
+old daily-summary automation have both been deleted from the instance.
+These automations live in the Home Assistant instance's automation store
+(not this repo's `custom_components/mutatrack/` code) — MutaTrack only
+supplies the underlying sensors they trigger on and read. This doc exists
+so the full environment (HA config + this repo) can be recreated on a
+fresh install, and so the trial's rationale/status isn't lost between
+sessions.
 
 YAML exports of each automation live in `ha-config/automations/`. They are
 reference/recreation copies, not applied automatically — HA's automation
-store is the live source of truth. Re-apply by pasting into the HA UI's
-automation editor (YAML mode) or via the REST API (see "Recreating on a
-fresh install" below).
+store is the live source of truth. `system_power_announcement.yaml` is
+the one currently live; the other two carry a `.deleted` extension —
+they're no longer on the instance, kept only as history/recreation
+reference. Re-apply any of them by pasting into the HA UI's automation
+editor (YAML mode) or via the REST API (see "Recreating on a fresh
+install" below).
 
 ## Why this exists
 
@@ -25,7 +31,7 @@ Two announcement automations were already running on the live HA instance
    `sensor.mutatrack_<device>_battsoc` crosses a new 10% boundary (e.g.
    79%→80%, not 81%→82%). Three canned branches: full charge, ≤20% low
    battery warning, plain "at N percent" otherwise.
-2. **`mutatrack_daily_summary_via_ollama.yaml.superseded`** ("MutaTrack
+2. **`mutatrack_daily_summary_via_ollama.yaml.deleted`** ("MutaTrack
    Daily Summary via Ollama") — once-daily (21:00) LLM-generated summary
    of the day's solar/battery numbers via `ai_task.generate_data` against
    a local Ollama `ai_task` entity, posted as a `persistent_notification`.
@@ -42,33 +48,30 @@ generation to do this live, so the current version (v5) computes the
 comfort/risk verdict in Jinja and picks from hand-written phrasing instead
 of calling an LLM at all. Treat "LLM-generated" as the aspiration this is
 working toward, not the current implementation — see the version history
-in `power_comfort_announcement_trial.yaml`'s header comment for exactly
-what changed and why at each step.
+in `power_comfort_announcement_trial.yaml.deleted`'s header comment for
+exactly what changed and why at each step.
 
-## Current state (trial)
+## Current state (live)
 
-`power_comfort_announcement_trial.yaml` — created via the HA REST API
-2026-08-22 (`automation.mutatrack_power_comfort_announcement_trial`, config
-id `1787376439276`). Runs **in parallel** with the original spoken
-automation:
+`system_power_announcement.yaml` is now the only automation, having been
+cut over 2026-08-22 to the phrasing developed in the trial
+(`power_comfort_announcement_trial.yaml.deleted`, formerly
+`automation.mutatrack_power_comfort_announcement_trial`, config id
+`1787376439276` — deleted from the instance once the cutover landed):
 
-- Same trigger and same 10%-crossing conditions as
-  `system_power_announcement.yaml` — fires on identical events.
-- Action (as of v5) computes SOC% and load% (averaged across
+- Same trigger/10%-crossing conditions as before.
+- Action computes SOC% and load% (averaged across
   `l1_phase_output_load_rate` / `loadpercent_l2`, not stated in the output)
   against time-of-day and picks a hand-written phrase at random — no LLM
-  call. Earlier versions (v1-v4) called `ai_task.generate_data` (Ollama)
-  instead; see the "Model capability findings" section below for why that
-  was rolled back for now.
-- Posts the result as a `persistent_notification` (text), rather than
-  speaking it — this is deliberate, so the spoken experience is unchanged
-  during review.
-- The original spoken automation (`system_power_announcement.yaml`) is
-  untouched and still speaking the old templated message.
-- The daily summary automation
-  (`mutatrack_daily_summary_via_ollama.yaml.superseded`) is **still live**
-  on the instance, pending removal — not yet deleted, since the trial
-  hasn't been reviewed/cut over yet.
+  call. Earlier trial versions (v1-v4) called `ai_task.generate_data`
+  (Ollama) instead; see the "Model capability findings" section below for
+  why that was rolled back.
+- Spoken via `tts.speak` (`tts.piper` → `media_player.vlc_telnet`), same as
+  before the cutover — only the message template changed.
+- The old daily-summary automation
+  (`mutatrack_daily_summary_via_ollama.yaml.deleted`, formerly config id
+  `1785417591353`) has also been deleted from the instance — it's fully
+  superseded, nothing depends on it.
 
 **Bug found and fixed 2026-08-22:** the first real trigger (SOC 29→30)
 errored before posting anything — `ai_task.generate_data`'s `entity_id`
@@ -76,7 +79,7 @@ was under a separate `target:` key instead of directly in `data:` (the
 pattern the daily-summary automation used successfully). Mixing `target`
 with this service caused HA to also inject a list-form `entity_id` into
 `data`, which the service schema rejects as needing a plain string. Fixed
-live and in `power_comfort_announcement_trial.yaml`.
+live and in the trial export (now `power_comfort_announcement_trial.yaml.deleted`).
 
 **Prompt rewritten 2026-08-22, same day:** the first successful trigger
 (SOC 39→40) posted a notification, but the model's output was garbled — a
@@ -189,25 +192,21 @@ hosted LLM API):**
    real CPU/RAM numbers to reason from, rather than just "did HA stay
    responsive."
 
-**Retrieving trial output for review:** persistent_notification entities
-are queryable over the HA REST API without any config change, so
-`scripts/fetch_trial_notifications.py` pulls the full series (filter by
-title, e.g. `"Power Comfort"`) for review — no text-file `notify` target
-or HA restart needed.
-
-```bash
-.venv/bin/python3 scripts/fetch_trial_notifications.py "Power Comfort"
-```
+**`scripts/fetch_trial_notifications.py`** was written to review the
+trial's `persistent_notification` output before the cutover; it's no
+longer needed day-to-day now that the trial automation is gone (nothing
+posts a `persistent_notification` for this anymore — output is spoken),
+but it's left in place since the same technique (querying
+`persistent_notification.*` entities over the REST API) is generally
+useful for any future trial-via-notification approach.
 
 ## Next steps (not yet done)
 
 - [x] Cut the spoken automation (`system_power_announcement.yaml`) over
       to the v5 static-randomized-phrasing message — done 2026-08-22.
-- [ ] Delete `automation.mutatrack_power_comfort_announcement_trial`
-      (its job is done — its output is now what the spoken automation
-      uses) and `automation.mutatrack_daily_summary_via_ollama`
-      (superseded) — neither has been deleted yet, both still live on
-      the instance.
+- [x] Delete `automation.mutatrack_power_comfort_announcement_trial` and
+      `automation.mutatrack_daily_summary_via_ollama` — done 2026-08-22,
+      both removed from the instance via the REST API.
 - [ ] **Revisit real LLM-generated phrasing once on better hardware** —
       see "Model capability findings" above for exactly what to re-test
       and why it was shelved for now.
@@ -222,10 +221,6 @@ separately configured on the HA instance:
   `media_player.vlc_telnet` — a VLC instance exposed via the VLC Telnet
   integration). Substitute any media player entity that supports
   `tts.speak`.
-- **Ollama `ai_task` entity** (`ai_task.ollama_ai_task`) — HA's Ollama
-  integration, configured with an `ai_task` conversation entity pointed at
-  a local Ollama server. This is the piece doing the LLM generation; model
-  choice/quality directly affects announcement output.
 - **`sun` integration** — core HA, enabled by default, no setup needed.
   Supplies `sun.sun`'s `next_rising`/`next_setting` attributes.
 - MutaTrack's own sensors (`battsoc`, load-rate sensors) — from this
@@ -235,9 +230,16 @@ separately configured on the HA instance:
   to match the target install's actual sensor entity ids before
   re-applying.
 
+**Only needed if reviving LLM-generated phrasing** (not required for the
+current static-phrasing implementation): an **Ollama `ai_task` entity**
+(`ai_task.ollama_ai_task`) — HA's Ollama integration, configured with an
+`ai_task` conversation entity pointed at a local Ollama server. See "Model
+capability findings" above before investing in this on modest hardware.
+
 ## Recreating on a fresh install
 
-1. Set up the dependencies above (Piper, a media player, Ollama `ai_task`).
+1. Set up the dependencies above (Piper, a media player; Ollama `ai_task`
+   only if reviving LLM-generated phrasing).
 2. Install/configure MutaTrack itself, confirm the battery SOC and load
    sensors exist with their actual entity ids.
 3. Edit the entity ids in the relevant YAML file(s) under
