@@ -2,8 +2,14 @@
 # dashboard-powertrack). Live dashboard title "Sundial", id
 # dashboard_powertrack, storage mode (not YAML-mode on the instance --
 # this file is a read-only export for recreation/review, not something HA
-# reads directly). See docs/ha-automations.md's sibling doc,
-# docs/ha-dashboards.md, for context.
+# reads directly). See docs/ha-dashboards.md for context.
+#
+# UPDATED 2026-08-22: Maintenance view's "Time remaining / to full" card
+# was only ever wired to the discharge-only battery_time_remaining
+# entity -- the charging side (battery_time_to_full, added in v0.4.0)
+# was never actually shown here despite the card's name implying it was
+# covered. Split into two cards: "Time remaining" (unchanged entity) and
+# "Time to full" (the new entity).
 #
 # Entity ids containing "i30000251520943825" are this install's
 # inverter-serial-derived suffix -- will differ on other installs.
@@ -146,7 +152,11 @@ views:
   - type: custom:button-card
     template: health_tile
     entity: sensor.office_mutatrack_i30000251520943825_battery_time_remaining
-    name: Time remaining / to full
+    name: Time remaining
+  - type: custom:button-card
+    template: health_tile
+    entity: sensor.office_mutatrack_base_ha_battery_time_to_full
+    name: Time to full
   - type: entities
     title: Forecast detail
     entities:

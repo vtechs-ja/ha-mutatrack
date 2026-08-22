@@ -61,6 +61,28 @@ Dashboard id `dashboard_powertrack`, title "Sundial", url path
   actual generation ÷ Forecast.Solar-expected; grid power estimate: your
   own grid-draw estimation logic).
 
+## Follow-up: Maintenance view didn't actually show time-to-full (2026-08-22)
+
+After adding `battery_time_to_full` as its own sensor (see
+[docs/ha-automations.md](ha-automations.md)'s "Forecast integration"
+section), the user configured a battery capacity and asked why the
+Maintenance view's "Time remaining / to full" card still showed
+`unknown`. Two separate causes:
+
+1. At that exact moment the battery was `idle` (neither charging nor
+   discharging) — both forecast sensors correctly show `unknown` then,
+   regardless of capacity being configured; there's no rate to project
+   from. Not a bug.
+2. The real gap: that card was — as found earlier — only ever wired to
+   the discharge-only `battery_time_remaining` entity, never updated to
+   also reference the new `battery_time_to_full` sensor. So even once
+   charging resumed, the card still wouldn't have shown anything.
+
+Fixed by splitting it into two adjacent cards, "Time remaining" and
+"Time to full", each pointed at its own entity — pushed live via
+`lovelace/config/save` over the WebSocket API, and re-exported to
+`ha-config/dashboards/dashboard-powertrack.yaml`.
+
 ## Recreating on a fresh install
 
 1. Install the frontend custom cards above via HACS (frontend, not
