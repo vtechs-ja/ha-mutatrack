@@ -60,6 +60,15 @@ automation:
   on the instance, pending removal — not yet deleted, since the trial
   hasn't been reviewed/cut over yet.
 
+**Bug found and fixed 2026-08-22:** the first real trigger (SOC 29→30)
+errored before posting anything — `ai_task.generate_data`'s `entity_id`
+was under a separate `target:` key instead of directly in `data:` (the
+pattern the daily-summary automation used successfully). Mixing `target`
+with this service caused HA to also inject a list-form `entity_id` into
+`data`, which the service schema rejects as needing a plain string. Fixed
+live and in `power_comfort_announcement_trial.yaml`. Not yet reconfirmed
+against a real SOC crossing — waiting on the next one.
+
 **Retrieving trial output for review:** persistent_notification entities
 are queryable over the HA REST API without any config change, so
 `scripts/fetch_trial_notifications.py` pulls the full series (filter by

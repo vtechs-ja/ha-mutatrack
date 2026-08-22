@@ -14,6 +14,16 @@
 #
 # Entity ids containing "i30000251520943825" are this install's inverter
 # serial-derived suffix — see the note in system_power_announcement.yaml.
+#
+# FIXED 2026-08-22 (post-creation): the first real trigger (SOC 29->30)
+# errored before posting any notification — "value should be a string for
+# dictionary value @ data['entity_id']". Root cause: entity_id was under a
+# separate `target:` key instead of directly in `data:`, which is the
+# pattern the working daily-summary automation uses (see
+# mutatrack_daily_summary_via_ollama.yaml.superseded). Mixing `target` with
+# this service caused HA to also inject a list-form entity_id into `data`,
+# which the service schema rejects as needing a plain string. Fixed below;
+# not yet reconfirmed end-to-end against a real SOC crossing.
 alias: "MutaTrack Power Comfort Announcement (Trial)"
 description: "Trial: LLM-generated comfort announcement as text, parallel to the spoken template"
 triggers:
@@ -31,9 +41,8 @@ conditions:
       {{ (trigger.from_state.state | int(0) // 10) != (trigger.to_state.state | int(0) // 10) }}
 actions:
   - action: ai_task.generate_data
-    target:
-      entity_id: ai_task.ollama_ai_task
     data:
+      entity_id: ai_task.ollama_ai_task
       task_name: mutatrack_power_comfort
       instructions: >
         You are Home Assistant, giving the homeowner a short spoken-style
