@@ -5,9 +5,12 @@ charging) estimate purely from telemetry MutaTrack is already polling
 (SOC, instantaneous battery power, daily cumulative charge/discharge
 energy) — no new API calls. Total battery capacity is not present anywhere
 in the ValueClouds API response (SOC is percentage-only), so this module
-treats capacity as either a user-configured value or one derived
-empirically from observed charge/discharge cycles, and flags a deviation
-warning if the two disagree. Only the "naive instantaneous rate" and
+treats a user-configured capacity as a bootstrap fallback: it's used until
+the empirically-derived value (from observed charge/discharge cycles)
+reaches high confidence, at which point empirical takes over as the
+active source, and a deviation warning fires if the two disagree
+(see BatteryForecastEngine._resolve_capacity). Only the "naive
+instantaneous rate" and
 "rolling average rate" tiers are implemented here (both directions); the
 time-of-day pattern tier is tracked separately, not yet built.
 
@@ -56,6 +59,10 @@ IDLE_DEADBAND_W = 20.0
 MIN_CYCLE_SOC_DELTA_PERCENT = 5.0
 CAPACITY_DEVIATION_WARN_RATIO = 0.20
 EMPIRICAL_CAPACITY_EMA_ALPHA = 0.3
+# Cycle counts gating empirical confidence — see _resolve_capacity's
+# docstring for why this determines the configured->empirical handoff.
+EMPIRICAL_HIGH_CONFIDENCE_CYCLES = 5
+EMPIRICAL_MEDIUM_CONFIDENCE_CYCLES = 2
 ROUND_TRIP_EMA_ALPHA = 0.3
 # A ratio above this is almost certainly a bad pairing (e.g. two partial
 # charges before one discharge), not real round-trip efficiency > 100%.
@@ -151,9 +158,8 @@ class BatteryForecastEngine:
         self._samples.append(sample)
         self._evict_old_samples(sample.timestamp)
 
-        capacity_kwh, capacity_source = self._resolve_capacity()
+        capacity_kwh, capacity_source, confidence = self._resolve_capacity()
         deviation_warning = self._has_capacity_deviation()
-        confidence = self._calibration_confidence(capacity_source)
 
         avg_discharge_w = self._rolling_average_discharge_power_w()
         avg_charge_w = self._rolling_average_charge_power_w()
@@ -195,29 +201,50 @@ class BatteryForecastEngine:
             round_trip_cycles=self._round_trip_cycles,
         )
 
-    def _resolve_capacity(self) -> tuple[float | None, CapacitySource]:
+    def _resolve_capacity(self) -> tuple[float | None, CapacitySource, Confidence]:
+        """Configured capacity is a bootstrap fallback, not a permanent override.
+
+        The configured value (if set) is used until the empirical estimate
+        (from observed charge/discharge cycles) reaches high confidence —
+        at that point empirical takes over as the active source, since it
+        reflects how the battery is actually behaving rather than a
+        number typed in once. `_has_capacity_deviation` flags it at that
+        same handoff point if the two disagree, so a wrong/stale
+        configured value gets surfaced instead of silently overridden.
+        """
+        empirical_confidence = self._empirical_confidence()
+        if self._empirical_capacity_kwh is not None and empirical_confidence == "high":
+            return self._empirical_capacity_kwh, "empirical", empirical_confidence
         if self._configured_capacity_kwh is not None:
-            return self._configured_capacity_kwh, "configured"
+            # Still bootstrapping (or no empirical data yet) — report the
+            # empirical confidence-in-progress so calibration approaching
+            # the handoff is visible even while configured is still active.
+            confidence = "low" if empirical_confidence == "none" else empirical_confidence
+            return self._configured_capacity_kwh, "configured", confidence
         if self._empirical_capacity_kwh is not None:
-            return self._empirical_capacity_kwh, "empirical"
-        return None, "unavailable"
+            return self._empirical_capacity_kwh, "empirical", empirical_confidence
+        return None, "unavailable", "none"
 
     def _has_capacity_deviation(self) -> bool:
         if self._configured_capacity_kwh is None or self._empirical_capacity_kwh is None:
+            return False
+        if self._empirical_confidence() != "high":
+            # Don't warn on a low/medium-confidence empirical reading —
+            # wait until it's trustworthy enough to actually take over
+            # (see _resolve_capacity), same moment the warning becomes
+            # actionable rather than noise.
             return False
         diff_ratio = abs(self._configured_capacity_kwh - self._empirical_capacity_kwh) / (
             self._configured_capacity_kwh
         )
         return diff_ratio > CAPACITY_DEVIATION_WARN_RATIO
 
-    def _calibration_confidence(self, capacity_source: CapacitySource) -> Confidence:
-        if capacity_source == "unavailable":
+    def _empirical_confidence(self) -> Confidence:
+        if self._empirical_capacity_kwh is None:
             return "none"
-        if capacity_source == "configured" and self._empirical_capacity_kwh is None:
-            return "low"
-        if self._observed_cycles >= 5:
+        if self._observed_cycles >= EMPIRICAL_HIGH_CONFIDENCE_CYCLES:
             return "high"
-        if self._observed_cycles >= 2:
+        if self._observed_cycles >= EMPIRICAL_MEDIUM_CONFIDENCE_CYCLES:
             return "medium"
         return "low"
 
