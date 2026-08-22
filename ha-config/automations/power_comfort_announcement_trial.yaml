@@ -22,8 +22,34 @@
 # pattern the working daily-summary automation uses (see
 # mutatrack_daily_summary_via_ollama.yaml.superseded). Mixing `target` with
 # this service caused HA to also inject a list-form entity_id into `data`,
-# which the service schema rejects as needing a plain string. Fixed below;
-# not yet reconfirmed end-to-end against a real SOC crossing.
+# which the service schema rejects as needing a plain string.
+#
+# REWRITTEN 2026-08-22 (prompt v4, same day): the first real notification
+# (SOC 39->40, daytime) came back garbled — the model (llama3.2
+# 1b-instruct-q4_K_M, a small quantized local model) just echoed the raw
+# prompt facts back in a degenerating, self-contradicting repeat loop
+# instead of composing the requested sentences. Root cause: the original
+# prompt asked the model to both reason about comfort/risk AND compose
+# natural phrasing in one step — too much for a 1B model. Iterated
+# directly against ai_task.generate_data (bypassing the automation, via
+# `POST /api/services/ai_task/generate_data?return_response`) through
+# several prompt versions:
+#   v2: shortened instructions, still asked the model to reason about
+#       comfort/risk itself -> coherent but sometimes hallucinated
+#       numbers or refused to give a verdict ("it is not clear whether...")
+#   v3/v4 (this version): comfort/risk verdict is now decided
+#       deterministically in the Jinja template (mirrors the Home view's
+#       existing threshold logic on the Sundial dashboard, see
+#       ha-config/dashboards/dashboard-powertrack.yaml) — night hours +
+#       SOC<40 + load>25% picks the "at risk" prompt branch, night+SOC<40
+#       otherwise picks "comfortable," 100% picks "fully charged," anything
+#       else just states the percentage. The model's only job per branch
+#       is turning an already-decided outcome into 1-2 short sentences,
+#       never to reason or reference exact numbers. This is a far easier
+#       task for a 1B model and came back consistent and coherent across
+#       repeated test calls for every branch. Prompt may be tightened
+#       further (or the model swapped for a larger one) depending on how
+#       real crossings look over the next few days.
 alias: "MutaTrack Power Comfort Announcement (Trial)"
 description: "Trial: LLM-generated comfort announcement as text, parallel to the spoken template"
 triggers:
@@ -45,24 +71,19 @@ actions:
       entity_id: ai_task.ollama_ai_task
       task_name: mutatrack_power_comfort
       instructions: >
-        You are Home Assistant, giving the homeowner a short spoken-style
-        status update on their battery.
-        Talk directly to them ("you", "your battery") in 1-2 short sentences.
-
-        Battery charge: {{ trigger.to_state.state }} percent.
-        Current load: {{ ((states('sensor.mutatrack_i30000251520943825_l1_phase_output_load_rate')|float(0) + states('sensor.mutatrack_i30000251520943825_loadpercent_l2')|float(0)) / 2) | round(0) }} percent of capacity.
-        Time now: {{ now().strftime('%H:%M') }}.
-        Next sunrise: {{ state_attr('sun.sun','next_rising') }}.
-        Next sunset: {{ state_attr('sun.sun','next_setting') }}.
-
-        Always state the battery percentage first. Only add a second
-        sentence about comfort/risk when it's actually informative — e.g.
-        overnight with meaningful load, where you should reason about
-        whether the battery will comfortably last until sunrise given the
-        load, or whether it's at risk of depleting first. Skip the comfort
-        remark during daylight or when the battery is high — just state the
-        percentage. Never mention the load number itself, only your
-        conclusion about comfort/risk. Keep it brief.
+        {% set soc = trigger.to_state.state | int(0) %}
+        {% set load = ((states('sensor.mutatrack_i30000251520943825_l1_phase_output_load_rate')|float(0) + states('sensor.mutatrack_i30000251520943825_loadpercent_l2')|float(0)) / 2) | round(0) %}
+        {% set hour = now().hour %}
+        {% set is_night = hour >= 21 or hour < 6 %}
+        {% if soc == 100 %}
+        Say in one short sentence that the battery is fully charged. Output only that sentence, nothing else.
+        {% elif is_night and soc < 40 and load > 25 %}
+        Say in one short sentence that the battery is at {{ soc }} percent. Then in one more short sentence, warn that it may run out of charge before sunrise given how much power is being used right now. Do not mention any specific numbers. Output only those two sentences, nothing else.
+        {% elif is_night and soc < 40 %}
+        Say in one short sentence that the battery is at {{ soc }} percent. Then in one more short sentence, reassure that it should comfortably last until sunrise given how little power is being used right now. Do not mention any specific numbers. Output only those two sentences, nothing else.
+        {% else %}
+        Say in one short sentence that the battery is at {{ soc }} percent. Output only that sentence, nothing else.
+        {% endif %}
     response_variable: comfort_result
   - action: notify.persistent_notification
     data:

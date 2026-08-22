@@ -66,8 +66,28 @@ was under a separate `target:` key instead of directly in `data:` (the
 pattern the daily-summary automation used successfully). Mixing `target`
 with this service caused HA to also inject a list-form `entity_id` into
 `data`, which the service schema rejects as needing a plain string. Fixed
-live and in `power_comfort_announcement_trial.yaml`. Not yet reconfirmed
-against a real SOC crossing — waiting on the next one.
+live and in `power_comfort_announcement_trial.yaml`.
+
+**Prompt rewritten 2026-08-22, same day:** the first successful trigger
+(SOC 39→40) posted a notification, but the model's output was garbled — a
+degenerating, self-contradicting repeat of the raw prompt facts instead of
+a real sentence. Root cause: `ai_task.ollama_ai_task` runs **Llama 3.2 1B**
+(`llama3.2:1b-instruct-q4_K_M`, confirmed via the device registry), a
+small quantized model that struggles when asked to both reason about
+comfort/risk *and* compose natural phrasing in one step. Iterated directly
+against `ai_task.generate_data` (bypassing the automation, via
+`POST /api/services/ai_task/generate_data?return_response` — safe, no
+state mutation) through a few prompt versions before finding a stable one:
+moving the comfort/risk verdict into deterministic Jinja logic (mirroring
+the Home view's existing threshold logic on the Sundial dashboard) and
+giving the model only the much easier job of phrasing an
+already-decided outcome. Confirmed coherent and consistent across
+repeated test calls for every branch (fully charged / at-risk overnight /
+comfortable overnight / plain percentage). See the automation export for
+the exact prompt and the full iteration history/rationale in its header
+comment. Still an open question whether this holds up over several days
+of real crossings, or whether the model needs swapping for something
+larger — that's what the remaining trial period is for.
 
 **Retrieving trial output for review:** persistent_notification entities
 are queryable over the HA REST API without any config change, so
