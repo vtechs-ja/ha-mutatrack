@@ -260,6 +260,31 @@ but it's left in place since the same technique (querying
 `persistent_notification.*` entities over the REST API) is generally
 useful for any future trial-via-notification approach.
 
+## Directionality (2026-08-23)
+
+"Battery's at 20 percent" read the same whether SOC was falling toward
+20% or climbing back up through it — very different situations,
+especially overnight (falling = real depletion risk; rising = e.g. a
+grid/generator charge event kicked in, nothing to worry about). Added
+`is_rising` (`trigger.to_state.state > trigger.from_state.state` — both
+already available on the trigger, no new sensor lookups) and used it to:
+
+- Split the night/low-SOC branch: it's now falling-only (the existing
+  at-risk/comfortable forecast-vs-sunrise logic), with a new sibling
+  branch for rising through the same threshold overnight — a distinct
+  "recovering" phrasing, no depletion framing at all.
+- Split the daytime/general branch into separate rising vs. falling
+  phrase sets, instead of one direction-blind set.
+
+The 100%-SOC branch is unchanged — direction is unambiguous there (you
+can't cross 100% falling).
+
+Verified all five branches (full charge, night+falling, night+rising,
+daytime+rising, daytime+falling) route to the correct phrase set via
+`POST /api/template` with literal from/to values substituted for
+`trigger.from_state`/`trigger.to_state` (not available outside a real
+automation trigger context) before pushing live.
+
 ## Next steps (not yet done)
 
 - [x] Cut the spoken automation (`system_power_announcement.yaml`) over
