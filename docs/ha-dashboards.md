@@ -61,6 +61,25 @@ Dashboard id `dashboard_powertrack`, title "Sundial", url path
   actual generation ÷ Forecast.Solar-expected; grid power estimate: your
   own grid-draw estimation logic).
 
+**Bug found and fixed 2026-08-23:** `grid_power_estimate`'s "state"
+field (the Jinja template it evaluates) was misconfigured — it literally
+contained the entire `template:\n  - sensor:\n      - name: ...` YAML
+wrapper text instead of just the bare Jinja expression that field is
+supposed to hold. Since most of that text isn't valid Jinja syntax, it
+rendered through as literal text with the actual computed number tacked
+onto the end, which HA's numeric-sensor validator correctly rejected —
+298+ recurring errors, sensor stuck at `unknown`, breaking the Sundial
+Home view's power-flow card (its `grid` entity). Confirmed via the
+config entry's options flow (`POST /api/config/config_entries/options/flow`
+with the entry id, which pre-fills the current stored value) — that's
+how the malformed value was actually visible. Fixed by resubmitting just
+the bare expression:
+```jinja
+{{ (states('sensor.mutatrack_..._outsumw')|float(0)) - (states('sensor.mutatrack_..._total_pv_power')|float(0)) - (states('sensor.mutatrack_..._total_battery_power')|float(0)) }}
+```
+Verified clean afterward: sensor producing real values, no further
+errors in the system log.
+
 ## Follow-up: Maintenance view didn't actually show time-to-full (2026-08-22)
 
 After adding `battery_time_to_full` as its own sensor (see
