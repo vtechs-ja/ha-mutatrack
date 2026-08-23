@@ -1,17 +1,16 @@
-# Exported 2026-08-22 via HA WebSocket API (lovelace/config, url_path
+# Exported 2026-08-23 via HA WebSocket API (lovelace/config, url_path
 # dashboard-powertrack). Live dashboard title "Sundial", id
 # dashboard_powertrack, storage mode (not YAML-mode on the instance --
 # this file is a read-only export for recreation/review, not something HA
 # reads directly). See docs/ha-dashboards.md for context.
 #
-# UPDATED 2026-08-22 (yet again, same day): the separate "Time remaining"
-# and "Time to full" cards both just showed "unknown" whenever the
-# battery was idle (neither charging nor discharging) -- collapsed into
-# one card that shows whichever is relevant given the current phase, or
-# an explicit "Battery idle" status when neither applies. Still reads
-# from the same two separate entities (battery_time_remaining /
-# battery_time_to_full) -- this is purely a smarter display choice, not
-# a change to the underlying sensor model.
+# UPDATED 2026-08-23: the "PV string balance" gauge card was a plain
+# gauge bound directly to its entity, unlike the round-trip-efficiency
+# and PV-performance-ratio gauges which were already wrapped in a
+# conditional (numeric_state check) so they hide gracefully instead of
+# showing HA's raw gauge-card error when the entity is unknown/non-
+# numeric. Wrapped it the same way (threshold -21, since this gauge's
+# min is -20, unlike the other two whose min is 0).
 #
 # Entity ids containing "i30000251520943825" are this install's
 # inverter-serial-derived suffix -- will differ on other installs.
@@ -143,15 +142,21 @@ views:
         green: 85
         yellow: 70
         red: 0
-  - type: gauge
-    entity: sensor.office_mutatrack_base_ha_pv_string_balance
-    name: PV string balance
-    min: -20
-    max: 20
-    severity:
-      green: -5
-      yellow: -12
-      red: -20
+  - type: conditional
+    conditions:
+    - condition: numeric_state
+      entity: sensor.office_mutatrack_base_ha_pv_string_balance
+      above: -21
+    card:
+      type: gauge
+      entity: sensor.office_mutatrack_base_ha_pv_string_balance
+      name: PV string balance
+      min: -20
+      max: 20
+      severity:
+        green: -5
+        yellow: -12
+        red: -20
   - type: conditional
     conditions:
     - condition: numeric_state

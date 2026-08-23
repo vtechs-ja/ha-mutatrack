@@ -145,6 +145,26 @@ integration" section for that reasoning). Verified all four template
 strings (primary/secondary/icon/icon_color) against live idle state
 before pushing.
 
+## Follow-up: "PV string balance" gauge showed a raw error while idle (2026-08-23)
+
+After the grid_power_estimate fix above, still saw an error on the
+Maintenance view: `"Entity is non-numeric: sensor.office_mutatrack_ba..."`,
+in place of where "PV string balance" should be. Unlike the round-trip-
+efficiency and PV-performance-ratio gauges (both already wrapped in a
+`conditional` numeric_state check, so they hide cleanly when their
+entity is `unknown`/non-numeric), the PV string balance gauge was a
+**plain** `gauge` card bound directly to its entity — HA's gauge card
+has no graceful handling for a non-numeric state, so it just throws this
+raw error instead. Not related to the grid_power_estimate bug at all,
+just another instance of the same underlying pattern (an entity with no
+calibration data yet, `unknown` until real cycles accumulate).
+
+Wrapped it in the same `conditional` pattern as the other two gauges —
+threshold `above: -21` rather than `-1`, since this gauge's range is
+-20 to 20 (the other two are 0-100/0-250, so `-1` correctly captures
+"any real value" for them but would incorrectly hide legitimate
+negative readings here).
+
 ## Recreating on a fresh install
 
 1. Install the frontend custom cards above via HACS (frontend, not
