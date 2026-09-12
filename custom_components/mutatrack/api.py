@@ -17,6 +17,7 @@ from typing import Any
 import aiohttp
 
 from .const import (
+    API_REQUEST_TIMEOUT_SECONDS,
     DEFAULT_DEVADDR,
     DEFAULT_I18N,
     DEVICE_ONE_DATA_ENDPOINT,
@@ -75,13 +76,17 @@ class MutaTrackApiClient:
             "project": "IOT",
         }
         try:
-            async with self._session.post(LOGIN_ENDPOINT, json=payload) as resp:
+            async with self._session.post(
+                LOGIN_ENDPOINT,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=API_REQUEST_TIMEOUT_SECONDS),
+            ) as resp:
                 if resp.status != 200:
                     raise MutaTrackAuthError(
                         f"Login failed with HTTP status {resp.status}"
                     )
                 body = await resp.json(content_type=None)
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             raise MutaTrackApiError(f"Login request failed: {err}") from err
 
         if not (body or {}).get("success"):
@@ -141,7 +146,10 @@ class MutaTrackApiClient:
         }
         try:
             async with self._session.get(
-                DEVICE_ONE_DATA_ENDPOINT, params=params, headers=headers
+                DEVICE_ONE_DATA_ENDPOINT,
+                params=params,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=API_REQUEST_TIMEOUT_SECONDS),
             ) as resp:
                 if resp.status in (401, 403):
                     raise MutaTrackAuthError(
@@ -152,7 +160,7 @@ class MutaTrackApiClient:
                         f"Device data request failed with HTTP status {resp.status}"
                     )
                 body = await resp.json(content_type=None)
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, TimeoutError) as err:
             raise MutaTrackApiError(f"Device data request failed: {err}") from err
 
         # Confirmed live 2026-07-10: this API returns HTTP 200 on both

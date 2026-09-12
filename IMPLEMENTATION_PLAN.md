@@ -121,6 +121,15 @@ implementation summary.
 - [x] Verified live against Deron's real account/battery — installed and
       exercised in his real HA instance; live testing caught and fixed the
       low-SOC cutoff gap (v0.2.1, `BatStopSOC`)
+- [x] Fixed live 2026-09-12: `api.py`'s login/device-data requests had no
+      explicit timeout, so an unresponsive ValueClouds endpoint hung until
+      HA's bootstrap-stage-2 watchdog force-cancelled the whole config
+      entry setup (`asyncio.exceptions.CancelledError: Global task timeout:
+      Bootstrap stage 2 timeout`) — entry never loaded, no entities
+      created, which looked like the configured battery capacity had been
+      lost (it hadn't; it was untouched in config entry options, just never
+      rendered). Added `API_REQUEST_TIMEOUT_SECONDS` (v0.5.2) so a slow
+      endpoint now fails fast into a normal `setup_retry` instead.
 - [x] Visualization/dashboard guidance for the forecast sensor — written up
       as the [Battery Forecast Dashboard Guide](https://vtechs.atlassian.net/wiki/spaces/VTechEng/pages/60555278)
       Confluence subpage

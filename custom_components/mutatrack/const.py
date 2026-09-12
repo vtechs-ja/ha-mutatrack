@@ -39,6 +39,13 @@ DEFAULT_I18N = "en_US"
 DEFAULT_SCAN_INTERVAL_SECONDS = 300
 MIN_SCAN_INTERVAL_SECONDS = 120
 
+# Neither aiohttp nor HA's shared clientsession applies a default timeout —
+# an unresponsive ValueClouds endpoint during first setup would otherwise
+# hang until HA's own bootstrap-stage-2 watchdog force-cancels the whole
+# config entry (observed live 2026-09-12: "Global task timeout: Bootstrap
+# stage 2 timeout", which killed setup before any entities were created).
+API_REQUEST_TIMEOUT_SECONDS = 30
+
 HEADER_PROJECT = "IOT"
 
 # The 48 field ids returned by querySPDeviceLastData — confirmed live
