@@ -130,6 +130,25 @@ implementation summary.
       lost (it hadn't; it was untouched in config entry options, just never
       rendered). Added `API_REQUEST_TIMEOUT_SECONDS` (v0.5.2) so a slow
       endpoint now fails fast into a normal `setup_retry` instead.
+- [x] Fixed live 2026-09-12: two bugs in the capacity/rate calc, found
+      chasing a user report that the capacity estimate (11.54kWh) looked
+      significantly off from the configured 16kWh. (1) `net_power_w` was
+      computed as `battery_active_discharging_power - eybond_read_4`, but
+      the former (API title "Total battery power") is already a signed net
+      reading — confirmed live, it read -2824W while `eybond_read_4`
+      ("BattChgPower") simultaneously read +2830W — so the subtraction
+      double-counted charging power (~2x true rate), skewing the "time to
+      full" estimate. Fixed by using the field directly. (2) The empirical
+      capacity EMA had no outlier guard (unlike round-trip efficiency's
+      `ROUND_TRIP_SANITY_CEILING_PERCENT`): entity history showed it swing
+      16.55 → 11.82 → 13.27kWh within hours on 2026-09-05, implying one bad
+      cycle (~0.78kWh, likely a BMS SOC-recalibration jump) permanently
+      dragged the average down. Added `CAPACITY_OUTLIER_MIN_RATIO`/`_MAX_RATIO`
+      (v0.5.3) to reject a cycle's contribution to the EMA if it's more than
+      2x off from the current reference. Persisted calibration state
+      (`empirical_capacity_kwh`/`observed_cycles`/round-trip stats) was
+      reset on the live instance so it recalibrates clean under the fix
+      rather than slowly climbing out of the polluted average.
 - [x] Visualization/dashboard guidance for the forecast sensor — written up
       as the [Battery Forecast Dashboard Guide](https://vtechs.atlassian.net/wiki/spaces/VTechEng/pages/60555278)
       Confluence subpage

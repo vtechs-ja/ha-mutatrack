@@ -18,7 +18,7 @@ from .const import (
 )
 from .coordinator import MutaTrackCoordinator
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

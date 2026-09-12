@@ -68,6 +68,14 @@ class MutaTrackCoordinator(DataUpdateCoordinator[dict[str, MutaTrackField]]):
         if saved is not None:
             self.forecast_engine.restore_from_persisted_dict(saved)
 
+    async def async_reset_forecast_calibration(self) -> None:
+        """Discard learned calibration (bad-data episode, battery swap, etc.)
+        and persist the cleared state immediately, rather than waiting for
+        the next poll to overwrite the stale file on disk."""
+        self.forecast_engine.reset_calibration()
+        await self._forecast_store.async_save(self.forecast_engine.to_persisted_dict())
+        await self.async_request_refresh()
+
     async def _async_update_data(self) -> dict[str, MutaTrackField]:
         try:
             raw_fields = await self._api_client.async_get_device_data()

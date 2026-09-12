@@ -31,8 +31,15 @@ _LOGGER = logging.getLogger(__name__)
 # Field ids this module reads from coordinator data — see const.py and
 # docs/api-reference.md for how these were identified in the live response.
 SOC_FIELD_ID = "bt_battery_capacity"
+# API title is "Total battery power" — despite the field id's name, this is
+# already a *signed net* reading (positive = discharging, negative =
+# charging), not a discharge-only magnitude. Confirmed live 2026-09-12: while
+# charging at BattChgPower (eybond_read_4) = +2830W, this field read -2824W
+# — nearly identical magnitude, opposite sign. Previously this was combined
+# with eybond_read_4 via subtraction, which double-counted charging power
+# (~2x true rate); this field alone already carries the value/sign
+# net_power_w needs.
 DISCHARGE_POWER_FIELD_ID = "battery_active_discharging_power"
-CHARGE_POWER_FIELD_ID = "eybond_read_4"
 DISCHARGE_ENERGY_TODAY_FIELD_ID = "battery_energy_today_discharge"
 CHARGE_ENERGY_TODAY_FIELD_ID = "battery_energy_today_charge"
 # The inverter's own configured low-SOC cutoff (e.g. many setups switch to
@@ -59,6 +66,18 @@ IDLE_DEADBAND_W = 20.0
 MIN_CYCLE_SOC_DELTA_PERCENT = 5.0
 CAPACITY_DEVIATION_WARN_RATIO = 0.20
 EMPIRICAL_CAPACITY_EMA_ALPHA = 0.3
+# A single cycle's energy/SOC ratio can come out wildly wrong — e.g. a BMS
+# SOC-recalibration jump during a long low-power stretch reports a large SOC
+# swing backed by very little real energy. Observed live 2026-09-12: one bad
+# cycle implied ~0.78kWh and dragged the EMA from 16.55kWh to 11.82kWh in a
+# single update, which then takes many good cycles to recover from at this
+# alpha. Reject a cycle's contribution to the EMA if it's this far outside
+# the current reference (empirical if calibrated, else configured), the same
+# way ROUND_TRIP_SANITY_CEILING_PERCENT guards the round-trip EMA below. No
+# reference yet (first-ever cycle) means nothing to compare against, so it's
+# accepted unconditionally to bootstrap.
+CAPACITY_OUTLIER_MIN_RATIO = 0.5
+CAPACITY_OUTLIER_MAX_RATIO = 2.0
 # Cycle counts gating empirical confidence — see _resolve_capacity's
 # docstring for why this determines the configured->empirical handoff.
 EMPIRICAL_HIGH_CONFIDENCE_CYCLES = 5
@@ -144,6 +163,20 @@ class BatteryForecastEngine:
     def set_configured_capacity(self, capacity_kwh: float | None) -> None:
         """Update the user-configured capacity (options flow changed)."""
         self._configured_capacity_kwh = capacity_kwh
+
+    def reset_calibration(self) -> None:
+        """Discard empirical calibration state (a bad-data episode, a
+        physical battery replacement, etc.) so it recalibrates from scratch.
+
+        Leaves the in-progress sample window/cycle-in-progress alone (same
+        as a restart — see class docstring) and the user-configured capacity
+        untouched; only the *learned* state resets.
+        """
+        self._empirical_capacity_kwh = None
+        self._observed_cycles = 0
+        self._pending_charge_in_kwh = None
+        self._round_trip_efficiency_percent = None
+        self._round_trip_cycles = 0
 
     def to_persisted_dict(self) -> dict[str, float | int | None]:
         """Calibration state worth saving across restarts — see class docstring."""
@@ -356,21 +389,41 @@ class BatteryForecastEngine:
 
         observed_capacity_kwh = energy_delta / (soc_delta / 100)
 
-        if self._empirical_capacity_kwh is None:
-            self._empirical_capacity_kwh = observed_capacity_kwh
-        else:
-            self._empirical_capacity_kwh = (
-                EMPIRICAL_CAPACITY_EMA_ALPHA * observed_capacity_kwh
-                + (1 - EMPIRICAL_CAPACITY_EMA_ALPHA) * self._empirical_capacity_kwh
-            )
-        self._observed_cycles += 1
-        _LOGGER.debug(
-            "MutaTrack forecast: observed %s cycle, capacity=%.2fkWh, empirical EMA=%.2fkWh (n=%d)",
-            phase,
-            observed_capacity_kwh,
-            self._empirical_capacity_kwh,
-            self._observed_cycles,
+        reference_capacity_kwh = (
+            self._empirical_capacity_kwh
+            if self._empirical_capacity_kwh is not None
+            else self._configured_capacity_kwh
         )
+        is_outlier = reference_capacity_kwh is not None and not (
+            CAPACITY_OUTLIER_MIN_RATIO * reference_capacity_kwh
+            <= observed_capacity_kwh
+            <= CAPACITY_OUTLIER_MAX_RATIO * reference_capacity_kwh
+        )
+
+        if is_outlier:
+            _LOGGER.debug(
+                "MutaTrack forecast: rejected outlier %s cycle, observed=%.2fkWh vs "
+                "reference=%.2fkWh",
+                phase,
+                observed_capacity_kwh,
+                reference_capacity_kwh,
+            )
+        else:
+            if self._empirical_capacity_kwh is None:
+                self._empirical_capacity_kwh = observed_capacity_kwh
+            else:
+                self._empirical_capacity_kwh = (
+                    EMPIRICAL_CAPACITY_EMA_ALPHA * observed_capacity_kwh
+                    + (1 - EMPIRICAL_CAPACITY_EMA_ALPHA) * self._empirical_capacity_kwh
+                )
+            self._observed_cycles += 1
+            _LOGGER.debug(
+                "MutaTrack forecast: observed %s cycle, capacity=%.2fkWh, empirical EMA=%.2fkWh (n=%d)",
+                phase,
+                observed_capacity_kwh,
+                self._empirical_capacity_kwh,
+                self._observed_cycles,
+            )
 
         self._track_round_trip(phase, energy_delta)
 
@@ -416,7 +469,6 @@ def _sample_from_fields(fields: dict[str, dict]) -> _Sample | None:
 
     soc = _value(SOC_FIELD_ID)
     discharge_w = _value(DISCHARGE_POWER_FIELD_ID)
-    charge_w = _value(CHARGE_POWER_FIELD_ID)
     discharge_kwh_today = _value(DISCHARGE_ENERGY_TODAY_FIELD_ID)
     charge_kwh_today = _value(CHARGE_ENERGY_TODAY_FIELD_ID)
     # Read live, not cached — this is a user-adjustable inverter setting.
@@ -430,7 +482,7 @@ def _sample_from_fields(fields: dict[str, dict]) -> _Sample | None:
     if full_soc is None:
         full_soc = DEFAULT_FULL_SOC_PERCENT
 
-    if soc is None or discharge_w is None or charge_w is None:
+    if soc is None or discharge_w is None:
         return None
     if discharge_kwh_today is None or charge_kwh_today is None:
         return None
@@ -440,7 +492,7 @@ def _sample_from_fields(fields: dict[str, dict]) -> _Sample | None:
         soc_percent=soc,
         stop_soc_percent=stop_soc,
         full_soc_percent=full_soc,
-        net_power_w=discharge_w - charge_w,
+        net_power_w=discharge_w,
         discharge_energy_today_kwh=discharge_kwh_today,
         charge_energy_today_kwh=charge_kwh_today,
     )
