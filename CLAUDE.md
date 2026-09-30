@@ -54,6 +54,8 @@ calls without explicit direction.
 - [docs/ha-dashboards.md](docs/ha-dashboards.md) — HA dashboards built on
   top of MutaTrack's sensors (the "Sundial" dashboard), with an export
   under `ha-config/dashboards/`.
+- [docs/ha-servers.md](docs/ha-servers.md) — HA start/stop control of the frankenmac and
+  codey servers (WoL + SSH poweroff), YAML under `ha-config/servers/`; applied 2026-09-30
 
 Both of the above are HA-side config, not integration code — they live
 outside `custom_components/mutatrack/` but are tracked here so the whole

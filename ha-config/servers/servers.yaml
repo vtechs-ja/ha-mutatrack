@@ -1,0 +1,41 @@
+# Power control for the two Linux dev servers (frankenmac, codey) from Home
+# Assistant (HAOS). NOT APPLIED to the live instance yet -- written 2026-09-30,
+# untested. See docs/ha-servers.md for setup and the order to apply things.
+#
+# Goes in /config/packages/servers.yaml (enable packages in configuration.yaml:
+#   homeassistant:
+#     packages: !include_dir_named packages
+# ), or split the three top-level keys into configuration.yaml.
+#
+# codey MAC confirmed by owner 2026-09-30.
+#
+# Resulting entities:
+#   switch.frankenmac / switch.codey  on = wake (magic packet), off = poweroff
+#                                     over SSH; state comes from ping to `host`
+#   shell_command.<name>_poweroff     callable directly from automations
+
+shell_command:
+  frankenmac_poweroff: >-
+    ssh -i /config/.ssh/ha_servers -o UserKnownHostsFile=/config/.ssh/known_hosts
+    -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes
+    ha-control@192.168.50.32 sudo /usr/bin/systemctl poweroff
+  codey_poweroff: >-
+    ssh -i /config/.ssh/ha_servers -o UserKnownHostsFile=/config/.ssh/known_hosts
+    -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes
+    ha-control@192.168.50.102 sudo /usr/bin/systemctl poweroff
+
+switch:
+  - platform: wake_on_lan
+    name: frankenmac
+    mac: "00:23:df:df:a0:f1"     # enp9s0, Wake-on: g confirmed 2026-09-30
+    host: 192.168.50.32
+    broadcast_address: 192.168.50.255
+    turn_off:
+      action: shell_command.frankenmac_poweroff
+  - platform: wake_on_lan
+    name: codey
+    mac: "D4:BE:D9:9A:A7:F2"
+    host: 192.168.50.102
+    broadcast_address: 192.168.50.255
+    turn_off:
+      action: shell_command.codey_poweroff
