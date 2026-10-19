@@ -285,6 +285,38 @@ daytime+rising, daytime+falling) route to the correct phrase set via
 `trigger.from_state`/`trigger.to_state` (not available outside a real
 automation trigger context) before pushing live.
 
+## Personality-of-the-day phrasing (2026-08-27, reverted to English 2026-09-03)
+
+On 2026-08-27, on request, the hand-written phrase lists were extended
+with two things, layered on top of the existing v5 static-phrasing
+structure (no LLM call involved either time):
+
+- **A "personality of the day":** a `persona` (one of `chill`, `auntie`,
+  `yute`, `rasta`, `sassy`) picked deterministically from
+  `now().strftime('%j') | int % 5` (day-of-year mod 5), so every
+  announcement on a given calendar day shares one voice/tone, rotating to
+  a different one the next day.
+- **More phrase variants per branch** for spread within a day, on top of
+  the day-to-day persona rotation: the two general (non-night,
+  non-low-SOC) rising/falling branches and the two night+falling/low-SOC
+  branches (at-risk and comfortable) got 3 variants per persona each
+  (these four see the most crossings by far); the full-charge branch and
+  the night+rising ("recovering") branch stayed at 2 each.
+
+Initially all phrasing was rewritten in Jamaican Patois. **Reverted to
+plain English on 2026-09-03** — Piper has no Jamaican Patois voice model,
+so it read the Patois spellings phonetically as an English voice sounding
+out unfamiliar words rather than with any actual accent, which in
+practice made the announcements hard to understand. The persona
+selection, branch layout, and 2-vs-3 variant counts per branch are
+unchanged; only the wording was translated to its closest plain-English
+equivalent, keeping each persona's distinct tone (chill/laid-back,
+auntie/caring-fussy, yute/hype, rasta/wise, sassy/blunt). See the
+automation export's header comment for the exact revision history, and
+the "Model capability findings" section above if reviving LLM-generated
+(rather than hand-written) phrasing is revisited later on better
+hardware.
+
 ## Next steps (not yet done)
 
 - [x] Cut the spoken automation (`system_power_announcement.yaml`) over

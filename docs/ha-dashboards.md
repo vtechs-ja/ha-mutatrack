@@ -165,6 +165,37 @@ threshold `above: -21` rather than `-1`, since this gauge's range is
 "any real value" for them but would incorrectly hide legitimate
 negative readings here).
 
+## Follow-up: power-flow card showed false "export to grid" (2026-09-13)
+
+Deron reported the Home view's power-flow diagram showing energy flowing
+back to the grid, on an install with no grid-export capability configured.
+Live values at the time: `grid_power_estimate = -102 W`, from
+`outsumw (1276) - total_pv_power (0) - total_battery_power (1378)` —
+`power-flow-card-plus` treats any negative grid value as export.
+
+This device has no grid-export telemetry at all (`energy_today_to_grid`/
+`energy_total_to_grid` don't exist as entities for this install; both
+`l_1/l_2_phase_grid_power_external_sampling` read flat 0), so there's no
+real path for that -102W to represent. Confirmed independently via the
+OEM ValueClouds/HomePower app's own energy-flow view, which showed the
+same underlying condition (Battery discharging 625.4W against a 570W
+Load) but displays Grid as a flat `0W` rather than negative — the gap is
+the inverter's own conversion/standby overhead, not exportable power, and
+the vendor's own app already floors it at zero.
+
+**Fix (proposed, not yet applied live):** floor `grid_power_estimate` at
+0 so this gap reads as "0W from grid" instead of a fabricated export
+value:
+```jinja
+{{ [((states('sensor.mutatrack_..._outsumw')|float(0)) - (states('sensor.mutatrack_..._total_pv_power')|float(0)) - (states('sensor.mutatrack_..._total_battery_power')|float(0))), 0] | max }}
+```
+Same options-flow mechanism as the 2026-08-23 fix (entry id
+`01KXH5KVTWKBHE0SKYYP8V59Z5`). Blocked from being applied via the API in
+this session by Claude Code's auto-mode classifier (modifying a shared/
+production resource) — apply by hand via Settings → Devices & Services →
+Helpers → "Grid Power Estimate", or grant a permission rule to allow it
+next time.
+
 ## Recreating on a fresh install
 
 1. Install the frontend custom cards above via HACS (frontend, not
