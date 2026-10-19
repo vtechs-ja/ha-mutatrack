@@ -73,5 +73,5 @@ switch, but on a later resume **the GPU did not come back and the fans ran high*
   up to ~30s, reads off while a machine boots, and says nothing about service health.
 - codey test: off toggle -> ping stopped in ~6s, journal shows a normal systemd
   shutdown; on toggle -> answering SSH within ~50s, no filesystem recovery.
-- **2026-10-19:** package updated to add `frankenmac_suspend` and `script.frankenmac_shutdown`, then the switch went back to poweroff (see above). Live `/config/packages/servers.yaml` needs the same one-line revert and a restart.
+- **2026-10-19:** package updated to add `frankenmac_suspend` and `script.frankenmac_shutdown`, then the switch went back to poweroff (see above). Live `/config/packages/servers.yaml` was reverted the same day (confirmed by the owner after a restart: both switches show poweroff). The first `sed` revert did not take effect until it was re-run.
 - Keep this in sync if the live package drifts (see CLAUDE.md on HA-side config).
