@@ -1,6 +1,6 @@
 # Power control for the two Linux dev servers (frankenmac, codey) from Home
-# Assistant (HAOS). NOT APPLIED to the live instance yet -- written 2026-09-30,
-# untested. See docs/ha-servers.md for setup and the order to apply things.
+# Assistant (HAOS). Applied 2026-09-30; frankenmac switched from poweroff to
+# suspend 2026-10-19. See docs/ha-servers.md for setup and the order to apply.
 #
 # Goes in /config/packages/servers.yaml (enable packages in configuration.yaml:
 #   homeassistant:
@@ -10,11 +10,29 @@
 # codey MAC confirmed by owner 2026-09-30.
 #
 # Resulting entities:
-#   switch.frankenmac / switch.codey  on = wake (magic packet), off = poweroff
+#   switch.codey                      on = wake (magic packet), off = poweroff
 #                                     over SSH; state comes from ping to `host`
+#   switch.frankenmac                 on = wake (magic packet), off = SUSPEND (S3)
+#                                     over SSH. Ping-based state reads "off" while
+#                                     suspended; that is expected.
+#   script.frankenmac_shutdown        full poweroff of frankenmac (see below)
 #   shell_command.<name>_poweroff     callable directly from automations
+#   shell_command.frankenmac_suspend
+#
+# WHY SUSPEND: Wake-on-LAN from a full poweroff on frankenmac (Mac Pro 5,1) only
+# works if the magic packet arrives within a few seconds of shutdown; after about
+# a minute it fails (Linux WoL is fine, Wake-on: g -- the Mac firmware/NIC loses
+# standby power). Suspend tested 2026-10-19: 5m20s asleep, woke from the HA switch.
+# After wake, frankenmac.local takes ~20s to resolve over mDNS; use the IP.
+#
+# frankenmac sudoers (/etc/sudoers.d/ha-control) allows both
+# `systemctl poweroff` and `systemctl suspend`.
 
 shell_command:
+  frankenmac_suspend: >-
+    ssh -i /config/.ssh/ha_servers -o UserKnownHostsFile=/config/.ssh/known_hosts
+    -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes
+    ha-control@192.168.50.32 sudo /usr/bin/systemctl suspend
   frankenmac_poweroff: >-
     ssh -i /config/.ssh/ha_servers -o UserKnownHostsFile=/config/.ssh/known_hosts
     -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes
@@ -24,6 +42,16 @@ shell_command:
     -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes
     ha-control@192.168.50.102 sudo /usr/bin/systemctl poweroff
 
+# Full shutdown of frankenmac. WARNING: waking from a full shutdown is currently
+# unreliable (WoL fails after ~1 min off), so use this only when the owner can
+# press the power button. For normal off, use switch.frankenmac (suspend).
+script:
+  frankenmac_shutdown:
+    alias: frankenmac shutdown
+    icon: mdi:power
+    sequence:
+      - action: shell_command.frankenmac_poweroff
+
 switch:
   - platform: wake_on_lan
     name: frankenmac
@@ -31,7 +59,7 @@ switch:
     host: 192.168.50.32
     broadcast_address: 192.168.50.255
     turn_off:
-      action: shell_command.frankenmac_poweroff
+      action: shell_command.frankenmac_suspend
   - platform: wake_on_lan
     name: codey
     mac: "D4:BE:D9:9A:A7:F2"

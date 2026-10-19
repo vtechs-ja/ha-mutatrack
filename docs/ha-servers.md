@@ -13,8 +13,29 @@ MutaTrack integration code; lives here with the other HA-side config.
 | SSH | `ssh.socket` active | `sshd` on, owner key authorized; `ssh codey` alias here; no `ha-control` user/key from HA yet |
 
 Config: `ha-config/servers/servers.yaml` (shell commands + `wake_on_lan`
-switches `switch.frankenmac`, `switch.codey`; on = magic packet, off =
-`systemctl poweroff` over SSH; state from ping) and
+switches `switch.frankenmac`, `switch.codey`, plus `script.frankenmac_shutdown`;
+on = magic packet; state from ping). `switch.codey` off = `systemctl poweroff`
+over SSH. **`switch.frankenmac` off = `systemctl suspend`** (changed 2026-10-19,
+see below). Full poweroff of frankenmac is a separate action,
+`script.frankenmac_shutdown` ("frankenmac shutdown").
+
+## frankenmac: suspend, not poweroff (2026-10-19)
+
+WoL from a full poweroff on frankenmac (Mac Pro 5,1, `enp9s0`) only works if the
+magic packet arrives within a few seconds of shutdown; after about a minute it
+fails. Linux is fine (`Wake-on: g`), so the Mac firmware/NIC loses standby power.
+Suspend (S3) tested 2026-10-19: asleep 5m20s, woke from the HA switch, containers
+resumed. So:
+
+- `switch.frankenmac` off -> `shell_command.frankenmac_suspend`; on -> magic packet.
+  Ping-based state reads **off while suspended** (expected).
+- `script.frankenmac_shutdown` -> `shell_command.frankenmac_poweroff`. Waking from
+  full shutdown is currently unreliable; use it only when the owner can press the
+  power button.
+- After wake, `frankenmac.local` takes ~20s to resolve over mDNS; check via
+  `192.168.50.32`.
+- frankenmac's `/etc/sudoers.d/ha-control` allows both `systemctl poweroff` and
+  `systemctl suspend` (NOPASSWD). codey is unchanged (poweroff only).
 
 
 ## Setup steps (owner runs the sudo ones)
@@ -37,10 +58,10 @@ switches `switch.frankenmac`, `switch.codey`; on = magic packet, off =
 
 ## Caveats
 
-- **`switch.frankenmac` off takes down the dev server:** Conductor, the
+- **`switch.frankenmac` off suspends the dev server:** Conductor, the
   Cloudflare tunnel, the OKX approval listener and Claude Code sessions all
   run there. Don't wire it to unattended automations without thought.
-- Powering off from HA does not survive a total power cut: WoL needs a clean
+- (codey) Powering off from HA does not survive a total power cut: WoL needs a clean
   shutdown, or BIOS "power on after AC loss".
 - The OKX listener is a WebSocket client to HA, so it drops whenever
   frankenmac is off.
@@ -57,4 +78,7 @@ switches `switch.frankenmac`, `switch.codey`; on = magic packet, off =
   up to ~30s, reads off while a machine boots, and says nothing about service health.
 - codey test: off toggle -> ping stopped in ~6s, journal shows a normal systemd
   shutdown; on toggle -> answering SSH within ~50s, no filesystem recovery.
+- **2026-10-19 change (frankenmac suspend + shutdown script): repo copy updated and
+  committed; live apply pending the owner pasting the new file into HA, then
+  restart (new `wake_on_lan` turn_off needs it) and the end-to-end test.**
 - Keep this in sync if the live package drifts (see CLAUDE.md on HA-side config).
