@@ -12,31 +12,26 @@ MutaTrack integration code; lives here with the other HA-side config.
 | WoL | `Wake-on: g` confirmed, survived a reboot | confirmed 2026-09-30 (woke from off); BIOS "Wake on LAN" (OptiPlex 790) already set |
 | SSH | `ssh.socket` active | `sshd` on, owner key authorized; `ssh codey` alias here; no `ha-control` user/key from HA yet |
 
-Config: `ha-config/servers/servers.yaml` (shell commands + `wake_on_lan`
-switches `switch.frankenmac`, `switch.codey`, plus `script.frankenmac_shutdown`;
-on = magic packet; state from ping). `switch.codey` off = `systemctl poweroff`
-over SSH. **`switch.frankenmac` off = `systemctl suspend`** (changed 2026-10-19,
-see below). Full poweroff of frankenmac is a separate action,
-`script.frankenmac_shutdown` ("frankenmac shutdown").
+Config: `ha-config/servers/servers.yaml` (shell commands, `wake_on_lan` switches
+`switch.frankenmac` and `switch.codey`, plus `script.frankenmac_shutdown`; on =
+magic packet, off = `systemctl poweroff` over SSH; state from ping).
 
-## frankenmac: suspend, not poweroff (2026-10-19)
+## frankenmac: suspend tried and reverted (2026-10-19)
 
 WoL from a full poweroff on frankenmac (Mac Pro 5,1, `enp9s0`) only works if the
 magic packet arrives within a few seconds of shutdown; after about a minute it
-fails. Linux is fine (`Wake-on: g`), so the Mac firmware/NIC loses standby power.
-Suspend (S3) tested 2026-10-19: asleep 5m20s, woke from the HA switch, containers
-resumed. So:
+fails (Linux `Wake-on: g` is fine, so the Mac firmware/NIC loses standby power).
+Suspend (S3) was tried as the "off" action: a 5m20s test woke fine from the HA
+switch, but on a later resume **the GPU did not come back and the fans ran high**.
+`switch.frankenmac` is therefore back on poweroff.
 
-- `switch.frankenmac` off -> `shell_command.frankenmac_suspend`; on -> magic packet.
-  Ping-based state reads **off while suspended** (expected).
-- `script.frankenmac_shutdown` -> `shell_command.frankenmac_poweroff`. Waking from
-  full shutdown is currently unreliable; use it only when the owner can press the
-  power button.
-- After wake, `frankenmac.local` takes ~20s to resolve over mDNS; check via
-  `192.168.50.32`.
-- frankenmac's `/etc/sudoers.d/ha-control` allows both `systemctl poweroff` and
-  `systemctl suspend` (NOPASSWD). codey is unchanged (poweroff only).
-
+- `shell_command.frankenmac_suspend` is still defined (and allowed in
+  `/etc/sudoers.d/ha-control`) but nothing uses it. Don't wire it up again before the
+  GPU resume problem is understood.
+- `script.frankenmac_shutdown` now duplicates the switch's off action.
+- Waking from full shutdown is unreliable: only power frankenmac off when you can
+  press its power button, or will wake it within seconds.
+- After a wake, `frankenmac.local` takes ~20s to resolve over mDNS; use `192.168.50.32`.
 
 ## Setup steps (owner runs the sudo ones)
 
@@ -58,10 +53,10 @@ resumed. So:
 
 ## Caveats
 
-- **`switch.frankenmac` off suspends the dev server:** Conductor, the
+- **`switch.frankenmac` off takes down the dev server:** Conductor, the
   Cloudflare tunnel, the OKX approval listener and Claude Code sessions all
   run there. Don't wire it to unattended automations without thought.
-- (codey) Powering off from HA does not survive a total power cut: WoL needs a clean
+- Powering off from HA does not survive a total power cut: WoL needs a clean
   shutdown, or BIOS "power on after AC loss".
 - The OKX listener is a WebSocket client to HA, so it drops whenever
   frankenmac is off.
@@ -78,7 +73,5 @@ resumed. So:
   up to ~30s, reads off while a machine boots, and says nothing about service health.
 - codey test: off toggle -> ping stopped in ~6s, journal shows a normal systemd
   shutdown; on toggle -> answering SSH within ~50s, no filesystem recovery.
-- **2026-10-19 change (frankenmac suspend + shutdown script): repo copy updated and
-  committed; live apply pending the owner pasting the new file into HA, then
-  restart (new `wake_on_lan` turn_off needs it) and the end-to-end test.**
+- **2026-10-19:** package updated to add `frankenmac_suspend` and `script.frankenmac_shutdown`, then the switch went back to poweroff (see above). Live `/config/packages/servers.yaml` needs the same one-line revert and a restart.
 - Keep this in sync if the live package drifts (see CLAUDE.md on HA-side config).
